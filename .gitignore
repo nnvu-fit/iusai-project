@@ -161,4 +161,7 @@ cython_debug/
 
 data
 images
+images-small
 videos
+
+*bak
