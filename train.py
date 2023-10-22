@@ -51,6 +51,8 @@ def train(model, optimizer, loss_fn, train_dataset, test_dataset, epochs=1, devi
     total_time = time.strftime("%H hours, %M minutes, %S seconds", time.gmtime(total_time))
     ## print the result of training
     print(f'Epoch {epoch+1}/{epochs}, Train Loss: {train_loss:.4f}, Test Loss: {test_loss:.4f}, Total Time: {total_time}')
+    ## set start training in time
+    start_time = time.time()
 
 ## generate score function to scoring the model performance on test dataset with lost function
 def score_model(model, loss_fn, test_dataset, device=None):
