@@ -89,4 +89,4 @@ def get_device():
   Returns:
     str: The device to use for training and scoring.
   """
-  return 'cuda:0' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
+  return 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
