@@ -19,6 +19,17 @@
         }
       ],
       "justMyCode": true
+    },
+    {
+      "name": "Streamlit: Local App",
+      "type": "python",
+      "request": "launch",
+      "module": "streamlit",
+      "args": [
+        "run",
+        "${workspaceFolder}/the_app/streamlit_app.py"
+      ],
+      "justMyCode": true
     }
   ]
 }
