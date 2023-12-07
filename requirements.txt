@@ -1,4 +1,4 @@
 ﻿streamlit==1.28.1
-torch==2.1.1
-torchvision==0.9.1
-torchaudio==0.8.1
+torch
+torchvision
+torchaudio
