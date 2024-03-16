@@ -3,7 +3,7 @@ import helper.model_helper as mh
 import helper.image_helper as ih
 
 # the set of models that already saved in this session
-models = {}
+st.session_state.setdefault("models", {})
 
 # set page config
 st.set_page_config(
@@ -11,7 +11,10 @@ st.set_page_config(
     page_icon="🧊",
 )
 
-st.write("# Welcome to Classification App! 👋")
+# toasts
+toast = st.toast
+
+st.write("# Welcome to My Final App of AI cource! 👋")
 st.write("This app is used to classify images using ResNet18, ResNet34, DenseNet121 models.")
 
 # Sidebar
@@ -59,7 +62,6 @@ classify_button = st.sidebar.button(
 # Main
 if image is not None:
     st.image(image, caption="Image to be classified", use_column_width=True)
-
     image_data = None
     if image_source == "Upload":
         image_data = image.read()
@@ -67,14 +69,20 @@ if image is not None:
         image_data = image
 
     if classify_button and (model_type in mh.model_types):
+        models = st.session_state["models"]
         # get model from model type
+        # toast message: loading model
+        toast("Loading model...")
         model = None
         if model_type in models:
             model = models[model_type]
         else:
             model = mh.get_model(model_type)
             models[model_type] = model
+            st.session_state["models"] = models
 
+        # toast message: classifying image
+        toast("Classifying image...")
         if model is None:
             st.write(f"Model {model_type} is not valid!")
         else:
@@ -82,6 +90,7 @@ if image is not None:
             result = mh.classify_image(image_data, model)
             # show result and score
             st.write(f"Result: {result}")
+else:
     st.write("Please select an image!")
 
 # Footer
