@@ -1,5 +1,6 @@
 import torch
 import time
+from sklearn.metrics import classification_report, confusion_matrix
 
 def cross_validate(model, optimizer, loss_fn, dataset, k=5, epochs=1, device=None):
   """
@@ -22,15 +23,32 @@ def cross_validate(model, optimizer, loss_fn, dataset, k=5, epochs=1, device=Non
   model.to(device)
   fold_size = len(dataset) // k
   total_loss = 0.0
+  report_metric = []
   for fold in range(k):
-
+    print(f'Fold {fold+1}/{k}:', end=' ')
     train_data = torch.utils.data.Subset(dataset, list(range(fold_size * fold)) + list(range(fold_size * (fold + 1), len(dataset))))
     test_data = torch.utils.data.Subset(dataset, range(fold_size * fold, fold_size * (fold + 1)))
     train_loader = torch.utils.data.DataLoader(train_data, batch_size=32, shuffle=True)
     test_loader = torch.utils.data.DataLoader(test_data, batch_size=32, shuffle=False)
-    train(model, optimizer, loss_fn, train_loader, test_loader, epochs, device)
+    lost_metric = train(model, optimizer, loss_fn, train_loader, test_loader, epochs, device)
+    report_metric.append(lost_metric)
     total_loss += score_model(model, loss_fn, test_loader, device)
-  return total_loss / k
+
+    y_true = []
+    y_pred = []
+    with torch.no_grad():
+      for inputs, targets in test_loader:
+        inputs, targets = inputs.to(device), targets.to(device)
+        outputs = model(inputs)
+        _, predicted = torch.max(outputs, 1)
+        y_true += targets.tolist()
+        y_pred += predicted.tolist()
+    report = classification_report(y_true, y_pred)
+    confusion = confusion_matrix(y_true, y_pred)
+    save_report(fold, report, confusion)
+
+    print(f'Fold {fold+1}/{k}, Test Loss: {total_loss:.4f}')
+  return [total_loss / k, report_metric]
 
 
 def train(model, optimizer, loss_fn, train_loader, test_loader, epochs=1, device=None):
@@ -54,6 +72,7 @@ def train(model, optimizer, loss_fn, train_loader, test_loader, epochs=1, device
   model.to(device)
   ## set start training in time
   start_time = time.time()
+  report_metric = []
   for epoch in range(epochs):
     model.train()
     train_loss = 0.0
@@ -82,9 +101,11 @@ def train(model, optimizer, loss_fn, train_loader, test_loader, epochs=1, device
     ## convert total time to hours, minutes, seconds
     total_time = time.strftime("%H hours, %M minutes, %S seconds", time.gmtime(total_time))
     ## print the result of training
+    report_metric.append([epoch+1, train_loss, test_loss, total_time])
     print(f'Epoch {epoch+1}/{epochs}, Train Loss: {train_loss:.4f}, Test Loss: {test_loss:.4f}, Total Time: {total_time}')
     ## set start training in time
     start_time = time.time()
+  return report_metric
 
 ## generate score function to scoring the model performance on test dataset with lost function
 def score_model(model, loss_fn, test_dataset, device=None):
@@ -122,3 +143,10 @@ def get_device():
     str: The device to use for training and scoring.
   """
   return 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
+
+def save_report(fold, report, confusion):
+  path_valid = "./results/resnet/valid/fold_" + str(fold) + ".txt"
+  with open(path_valid, 'w') as f:
+      f.write(report)
+      f.write('\n')
+      f.write(str(confusion))

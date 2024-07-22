@@ -1,5 +1,6 @@
 import glob
 import os
+import re
 import random
 import torch
 from torch.utils.data import Dataset
@@ -19,8 +20,9 @@ class ImageDataset(Dataset):
         if self.transform:
             x = self.transform(x)
         ## [0, 1, 2]: index == -2 => 1;
-        label = path_x.split(os.sep)[-2]
-        return x, torch.tensor(int(label), dtype=torch.long)
+        label_str = path_x.split(os.sep)[-2]
+        label_index = int(re.search(r'\d+', label_str).group())
+        return x, torch.tensor(int(label_index), dtype=torch.long)
 
     def __len__(self):
         return len(self.data)
