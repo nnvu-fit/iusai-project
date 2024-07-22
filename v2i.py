@@ -44,22 +44,22 @@ def extract_images_from_videos(video_list_location, image_path, inteval=None):
             frame_count += 1
             success, image = cap.read()
             continue
-        # Find label of current frame
-        frame_label_list = [l for [s, e, l] in gt if cap.get(cv2.CAP_PROP_POS_MSEC) >= float(
-            s) * 1000 and cap.get(cv2.CAP_PROP_POS_MSEC) < float(e) * 1000]
-        # If no label found, set label to 0
-        if frame_label_list == []:
-            frame_label_list.append('0')
+        # # Find label of current frame
+        # frame_label_list = [l for [s, e, l] in gt if cap.get(cv2.CAP_PROP_POS_MSEC) >= float(
+        #     s) * 1000 and cap.get(cv2.CAP_PROP_POS_MSEC) < float(e) * 1000]
+        # # If no label found, set label to 0
+        # if frame_label_list == []:
+        #     frame_label_list.append('0')
         # Get the first label in the list
-        frame_label = frame_label_list[0]
+        frame_label = image_prefix
         # Create folder for label if not exist
         if not os.path.exists(image_path + frame_label):
             os.makedirs(image_path + frame_label)
         cv2.imwrite(image_path + frame_label + '/' + image_prefix +
                     '_' + str(frame_count) + '.jpg', image)
-        # Increase label count by 1
-        label_count = [l for l in label_dict if l[0] == frame_label][0]
-        label_count[-1] += 1
+        # # Increase label count by 1
+        # label_count = [l for l in label_dict if l[0] == frame_label][0]
+        # label_count[-1] += 1
         # Read next frame
         success, image = cap.read()
         frame_count += 1

@@ -1,7 +1,39 @@
 import torch
 import time
 
-def train(model, optimizer, loss_fn, train_dataset, test_dataset, epochs=1, device=None):
+def cross_validate(model, optimizer, loss_fn, dataset, k=5, epochs=1, device=None):
+  """
+  Performs k-fold cross-validation on a PyTorch model using the specified optimizer and loss function.
+
+  Args:
+    model (torch.nn.Module): The PyTorch model to cross-validate.
+    optimizer (torch.optim.Optimizer): The optimizer to use for cross-validation.
+    loss_fn (callable): The loss function to use for cross-validation.
+    dataset (torch.utils.data.Dataset): The dataset to use for cross-validation.
+    k (int, optional): The number of folds to use for cross-validation. Defaults to 5.
+    num_epochs (int, optional): The number of epochs to train for. Defaults to 1.
+    device (str, optional): The device to use for cross-validation. If None, defaults to 'cuda' if available, else 'cpu'.
+
+  Returns:
+    float: The average loss on the given dataset across all folds.
+  """
+  if device is None:
+    device = get_device()
+  model.to(device)
+  fold_size = len(dataset) // k
+  total_loss = 0.0
+  for fold in range(k):
+
+    train_data = torch.utils.data.Subset(dataset, list(range(fold_size * fold)) + list(range(fold_size * (fold + 1), len(dataset))))
+    test_data = torch.utils.data.Subset(dataset, range(fold_size * fold, fold_size * (fold + 1)))
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=32, shuffle=True)
+    test_loader = torch.utils.data.DataLoader(test_data, batch_size=32, shuffle=False)
+    train(model, optimizer, loss_fn, train_loader, test_loader, epochs, device)
+    total_loss += score_model(model, loss_fn, test_loader, device)
+  return total_loss / k
+
+
+def train(model, optimizer, loss_fn, train_loader, test_loader, epochs=1, device=None):
   """
   Trains a PyTorch model on a given dataset using the specified optimizer and loss function.
 
@@ -25,7 +57,7 @@ def train(model, optimizer, loss_fn, train_dataset, test_dataset, epochs=1, devi
   for epoch in range(epochs):
     model.train()
     train_loss = 0.0
-    for inputs, targets in train_dataset:
+    for inputs, targets in train_loader:
       inputs, targets = inputs.to(device), targets.to(device)
       optimizer.zero_grad()
       outputs = model(inputs)
@@ -33,16 +65,16 @@ def train(model, optimizer, loss_fn, train_dataset, test_dataset, epochs=1, devi
       loss.backward()
       optimizer.step()
       train_loss += loss.item() * inputs.size(0)
-    train_loss /= len(train_dataset.dataset)
+    train_loss /= len(train_loader.dataset)
     model.eval()
     test_loss = 0.0
     with torch.no_grad():
-      for inputs, targets in test_dataset:
+      for inputs, targets in test_loader:
         inputs, targets = inputs.to(device), targets.to(device)
         outputs = model(inputs)
         loss = loss_fn(outputs, targets)
         test_loss += loss.item() * inputs.size(0)
-      test_loss /= len(test_dataset.dataset)
+      test_loss /= len(test_loader.dataset)
     ## set end training in time
     end_time = time.time()
     ## set total time
