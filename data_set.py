@@ -20,9 +20,8 @@ class ImageDataset(Dataset):
         if self.transform:
             x = self.transform(x)
         ## [0, 1, 2]: index == -2 => 1;
-        label_str = path_x.split(os.sep)[-2]
-        label_index = int(re.search(r'\d+', label_str).group())
-        return x, torch.tensor(int(label_index), dtype=torch.long)
+        label = self.label(index)
+        return x, torch.tensor(int(label), dtype=torch.long)
 
     def __len__(self):
         return len(self.data)
@@ -30,8 +29,14 @@ class ImageDataset(Dataset):
     def get_image(self, index):
         path_x = self.data[index]
         x = Image.open(path_x)
-        y = path_x.split(os.sep)[-2]
+        y = self.label(index)
         return x, int(y)
     
+    def label(self, index):
+        path_x = self.data[index]
+        label_str = path_x.split(os.sep)[-2]
+        label_index = int(re.search(r'\d+', label_str).group())
+        return label_index
+
     def labels(self):
         return sorted(set([path_x.split(os.sep)[-2] for path_x in self.data]))

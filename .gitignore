@@ -162,7 +162,9 @@ cython_debug/
 data
 images
 images-small
-images-medium
+images*
+subjects*
 videos
+models*
 
 *bak
