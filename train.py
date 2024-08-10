@@ -12,6 +12,12 @@ class Trainer:
       device = get_device()
     self.device = device
     self.current_fold = 0
+    
+    # set runing timestamp for the model to save the result
+    # in the folder with the timestamp name
+    # timestamp must be taken by current time
+    self.timestamp = time.strftime("%Y%m%d-%H%M%S")
+
     if random_seed_value is not None:
       seed_everything(random_seed_value)
 
@@ -146,7 +152,7 @@ class Trainer:
 
   def save_report(self, report, confusion):
     model_name = self.model.__class__.__name__ # get model name
-    path_valid = "./results/" + model_name + "/report/fold_" + str(self.current_fold) + ".txt"
+    path_valid = "./results/" + model_name + "/"+ str(self.timestamp) +"/fold_" + str(self.current_fold) + ".txt"
     with open(path_valid, 'w') as f:
         f.write(report)
         f.write('\n')
