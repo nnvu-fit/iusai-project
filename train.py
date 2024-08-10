@@ -11,7 +11,7 @@ class Trainer:
     if device is None:
       device = get_device()
     self.device = device
-    self.report_path_prefix = "./results/resnet/valid/fold_"
+    self.current_fold = 0
     if random_seed_value is not None:
       seed_everything(random_seed_value)
 
@@ -36,6 +36,7 @@ class Trainer:
     total_loss = 0.0
     report_metric = []
     for fold in range(k):
+      self.current_fold = fold
       print(f'Fold {fold+1}/{k}:', end=' ')
       train_data = torch.utils.data.Subset(dataset, list(range(fold_size * fold)) + list(range(fold_size * (fold + 1), len(dataset))))
       test_data = torch.utils.data.Subset(dataset, range(fold_size * fold, fold_size * (fold + 1)))
@@ -56,7 +57,7 @@ class Trainer:
           y_pred += predicted.tolist()
       report = classification_report(y_true, y_pred)
       confusion = confusion_matrix(y_true, y_pred)
-      self.save_report(fold, report, confusion)
+      self.save_report(report, confusion)
 
       print(f'Fold {fold+1}/{k}, Test Loss: {total_loss:.4f}')
     return [total_loss / k, report_metric]
@@ -143,8 +144,9 @@ class Trainer:
       test_loss /= len(test_dataset.dataset)
     return test_loss
 
-  def save_report(self, fold, report, confusion):
-    path_valid = self.report_path_prefix + str(fold) + ".txt"
+  def save_report(self, report, confusion):
+    model_name = self.model.__class__.__name__ # get model name
+    path_valid = "./results/" + model_name + "/report/fold_" + str(self.current_fold) + ".txt"
     with open(path_valid, 'w') as f:
         f.write(report)
         f.write('\n')
