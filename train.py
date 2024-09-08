@@ -3,7 +3,7 @@ import torch
 import time
 from sklearn.metrics import classification_report, confusion_matrix
 
-class Trainer:
+class ClassifierTrainer:
   def __init__(self, model, optimizer, loss_fn, random_seed_value=None, device=None):
     self.model = model
     self.optimizer = optimizer
@@ -48,6 +48,7 @@ class Trainer:
       test_data = torch.utils.data.Subset(dataset, range(fold_size * fold, fold_size * (fold + 1)))
       train_loader = torch.utils.data.DataLoader(train_data, batch_size=32, shuffle=True)
       test_loader = torch.utils.data.DataLoader(test_data, batch_size=32, shuffle=False)
+      
       lost_metric = self.train(train_loader, test_loader, epochs)
       report_metric.append(lost_metric)
       total_loss += self.score(self.model, test_loader)
@@ -157,7 +158,7 @@ class Trainer:
         f.write(report)
         f.write('\n')
         f.write(str(confusion))
-
+        
 
 def get_device():
   """
