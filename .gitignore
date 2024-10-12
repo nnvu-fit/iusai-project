@@ -160,6 +160,7 @@ cython_debug/
 #.idea/
 
 data
+datasets
 images
 images-small
 images*
