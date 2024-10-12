@@ -1,29 +1,10 @@
+import datetime
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 import torchvision
 
-import cv2
-import matplotlib.pyplot as plt
-
 from data_set import Gi4eDataset
 
-
-def get_labels(labels, device=None):
-    targets = []
-    bbox = labels['boxes']
-    category_id = labels['labels']
-    print(len(bbox))
-    for i in range(len(bbox[0])):
-        target = {}
-        xmin, ymin, width, height = [bbox[0][i], bbox[1][i], bbox[2][i], bbox[3][i]]
-        xmax = xmin + width
-        ymax = ymin + height
-        target['boxes'] = torch.stack([torch.tensor([xmin, ymin, xmax, ymax], dtype=torch.float32).to(device)])
-        target['labels'] = torch.stack([torch.tensor(category_id[i], dtype=torch.int64).to(device)])
-        targets.append(target)
-    return targets
 
 def main():
     # get device to train on
@@ -64,10 +45,13 @@ def main():
     # split the dataset into train and test
     train_size = int(0.8 * len(gi4e_dataset))
     test_size = len(gi4e_dataset) - train_size
-    train_dataset, test_dataset = torch.utils.data.random_split(gi4e_dataset, [train_size, test_size])
+    train_dataset, test_dataset = torch.utils.data.random_split(
+        gi4e_dataset, [train_size, test_size])
 
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=2)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=16, shuffle=False, num_workers=2)
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=16, shuffle=True, num_workers=2)
+    test_loader = torch.utils.data.DataLoader(
+        test_dataset, batch_size=16, shuffle=False, num_workers=2)
 
     # # show the first image and the labels
     # image, labels = gi4e_dataset[0]
@@ -83,7 +67,6 @@ def main():
 
     # plt.imshow(image)
     # plt.show()
-    
 
     # train the network
     for epoch in range(1):
@@ -110,7 +93,7 @@ def main():
             running_loss += loss.item()
             if i % 2000 == 1999:
                 print('[%d, %5d] loss: %.3f' %
-                    (epoch + 1, i + 1, running_loss / 2000))
+                      (epoch + 1, i + 1, running_loss / 2000))
                 running_loss = 0.0
 
         net.eval()
@@ -118,17 +101,28 @@ def main():
         total = 0
         with torch.no_grad():
             for data in test_loader:
-                images, labels = data
+                images, targets = data
                 images = images.to(device)
-                labels = get_labels(labels, device=device)
+                labels = []
+                for i in range(len(targets['boxes'])):
+                    label = {}
+                    label['boxes'] = targets['boxes'][i].to(device)
+                    label['labels'] = targets['labels'][i].to(device)
+                    labels.append(label)
+
                 outputs = net(images)
                 _, predicted = torch.max(outputs.data, 1)
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
-        print('Accuracy of the network on the test images: %d %%' % ( 100 * correct / total))
-
+        print('Accuracy of the network on the test images: %d %%' %
+              (100 * correct / total))
+        # save the model
+        current_date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        torch.save(net.state_dict(),
+                   './models/faster_rcnn/faster_rcnn' + current_date + '.pth')
 
     print('Finished Training')
+
 
 if __name__ == '__main__':
     main()
