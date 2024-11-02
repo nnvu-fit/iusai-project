@@ -4,9 +4,15 @@ import os
 import re
 import random
 import torch
-from torch.utils.data import Dataset
-from PIL import Image
 import torchvision
+from torch.utils.data import Dataset
+from torchvision import transforms as T
+
+import cv2
+from PIL import Image
+import os, sys
+import numpy as np
+
 
 
 class ImageDataset(Dataset):
@@ -142,19 +148,75 @@ class Gi4eDataset(Dataset):
         self.labelFiles = [label for label in self.labelFiles if re.match(
             r'^\d+_image_labels.txt$', label)]
         # read the annotation from the label files
-        self.data = [self.read_annotation(label) for label in self.labelFiles]
-        # suffle data
-        random.shuffle(self.data)
+        self.data = []
+        for label in self.labelFiles:
+            self.read_annotation(label)
+        # shuffle data
+        #random.shuffle(self.data)
+        print('self.data: ', self.data)
+        #print(len(self.data))
+
+        # self.image_path = []
+        # self.boxes = []
+        # self.labels = []
+        # for i in range(len(self.data)):
+        #     #print('first element:', self.data[i][0])
+        #     self.image_path.append(self.data[i][0])
+        #     #print('second element:', self.data[i][1].keys())
+        #     for key in self.data[i][1].keys():
+        #         #print(key)
+        #         if key == 'boxes':
+        #             self.boxes.append(self.data[i][1][key])
+        #         else:
+        #             self.labels.append(self.data[i][1][key])
+
+        #print('self.image_path: ', self.image_path)
+        #print('length of image path:', len(self.image_path))
+        #reset data
+        #self.data = []
+        #self.data.append(self.image_path)
+        #print('self.boxes: ', self.boxes)
+        #print('length of boxes:', len(self.boxes))
+
+        #self._dict = {'boxes': None, 'labels':None}
+        #self._dict['boxes'] = self.boxes[0]
+        #self._dict['labels'] = self.labels[0]
+        #for i in range(1, len(self.boxes)):
+        #    self._dict['boxes'] = torch.cat((self._dict['boxes'], self.boxes[i]), 0)
+        #    self._dict['labels'] = torch.cat((self._dict['labels'], self.labels[i]), 0)
+
+        #print('self.boxes dict: ', self._dict)
+        #self.data.append(self._dict)
+        #print('self.labels: ', self.labels)
+        #print('length of labels:', len(self.labels))
+        #for i in range(1, len(self.labels)):
+
+        #print('self.labels dict: ', self._dict)
+        #self.data.append(self._dict)
+
+        #print('self.data: ', self.data)
         self.transform = transform
 
     def __getitem__(self, index):
         x, target = self.data[index]
-        if self.transform:
-            x = self.transform(x)
-            # transform the target['boxes'] to match the transformed image
-        else:
-            x = torchvision.transforms.ToTensor()(x)
-            
+        #print('data x nay la gi: ', x)
+        #print('data target nay la gi: ', x)
+
+        #x = T.ToTensor()(x)
+        #x = cv2.cvtColor(x, cv2.COLOR_RGB2BGR)
+        try:
+             if self.transform:
+                 x = self.transform(x)
+                 # transform the target['boxes'] to match the transformed image
+             else:
+                 x = torchvision.transforms.ToTensor()(x)
+        except Exception as e:
+             print('Error: ', e)
+             print('index, x: ', index, x)
+             raise e
+
+        #print('boxes: ', x)
+        #print('target: ', target['labels'])
         return x, target
 
     def __len__(self):
@@ -166,14 +228,20 @@ class Gi4eDataset(Dataset):
     def read_annotation(self, label):
         # read the label file
         label_path = os.path.join(self.labelsDir, label)
+        print('label_path: ', label_path)
         with open(label_path, 'r') as f:
             lines = f.readlines()
         for i, line in enumerate(lines):
             values = line.split()
             file_name = values[0]
-            isX = True
-            x = []
-            y = []
+            
+            # read image from file_name
+            # read the values from the line
+            image_path = os.path.join(self.imagesDir, file_name)
+            if not os.path.exists(image_path):
+                continue
+
+            isX, x, y = True, [], []
             for value in values[1:]:
                 # parse the values to float
                 value = float(value)
@@ -185,15 +253,21 @@ class Gi4eDataset(Dataset):
                 # switch between x and y
                 isX = not isX
 
-        x_left_min, y_left_min = (min(x[0], x[2]), min(y[0], y[2] - self.offset))
-        x_left_max, y_left_max = (max(x[0], x[2]), max(y[0], y[2] + self.offset))
+            x_left_min, y_left_min = (min(x[0], x[2]), min(y[0], y[2] - self.offset) )
+            x_left_max, y_left_max = (max(x[0], x[2]), max(y[0], y[2] + self.offset) )
 
-        x_right_min, y_right_min = (min(x[3], x[5]), min(y[3], y[5]) - self.offset)
-        x_right_max, y_right_max = (max(x[3], x[5]), max(y[3], y[5]) + self.offset)
+            x_right_min, y_right_min = (min(x[3], x[5]), min(y[3], y[5]) - self.offset)
+            x_right_max, y_right_max = (max(x[3], x[5]), max(y[3], y[5]) + self.offset)
 
-        boxes = torch.stack([torch.tensor([x_left_min, y_left_min, x_left_max, y_left_max], dtype=torch.float32),
-                             torch.tensor([x_right_min, y_right_min, x_right_max, y_right_max], dtype=torch.float32)])
-        
-        target = {'boxes': boxes, 'labels': torch.tensor([1, 1], dtype=torch.int64)}
-        return Image.open(os.path.join(self.imagesDir, file_name)), target
+            boxes = torch.stack([torch.tensor([x_left_min, y_left_min, x_left_max, y_left_max], dtype=torch.float32),
+                                torch.tensor([x_right_min, y_right_min, x_right_max, y_right_max], dtype=torch.float32)])
+            
+            target = {'boxes': boxes, 'labels': torch.tensor([0, 1], dtype=torch.int64)}
+
+            print(image_path)
+
+            self.data.append((Image.open(image_path).convert('RGB'), target))
+            #self.data.append(target)
+
+        f.close()
 
