@@ -3,6 +3,7 @@ import os
 import torch
 import torch.optim as optim
 import torchvision
+import cv2
 from sklearn.model_selection import KFold
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 
@@ -54,7 +55,21 @@ def main(dataset_path):
     # gi4e path to the dataset
     gi4e_dataset = Gi4eDataset(dataset_path, transform=transform)
 
-    print('gi4e_dataset: ', gi4e_dataset)
+    # show first image
+    img, target = gi4e_dataset.get_image(0)
+    # draw the bounding boxes, each line should have different color
+    for box in target['boxes']:
+        print('box: ', box)
+        x1, y1, x2, y2 = box
+        # draw the bounding box
+        cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+        # draw x1, y1 coordinates
+        cv2.circle(img, (int(x1), int(y1)), 5, (255, 0, 0), -1)
+        # draw x2, y2 coordinates
+        cv2.circle(img, (int(x2), int(y2)), 5, (0, 0, 255), -1)
+    cv2.imshow('image', img)
+    cv2.waitKey(0)
+
     # Define the K-fold Cross Validator
     kfold = KFold(n_splits=k_folds, shuffle=True)
 
@@ -140,5 +155,5 @@ def main(dataset_path):
 
 if __name__ == '__main__':
     # dataset_path = './dataset/FasterRCNN/'
-    dataset_path = './datasets/gi4e/'
+    dataset_path = './datasets//faster-rcnn/gi4e/'
     main(dataset_path)

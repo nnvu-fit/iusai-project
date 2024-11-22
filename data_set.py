@@ -10,264 +10,212 @@ from torchvision import transforms as T
 
 import cv2
 from PIL import Image
-import os, sys
+import os
+import sys
 import numpy as np
 
 
-
 class ImageDataset(Dataset):
-    # Initialize your data from data_path using glob
-    def __init__(self, data_path, transform=None):
-        self.data = glob.glob(data_path + '/*/*.jpg')
-        # suffle data
-        random.shuffle(self.data)
-        self.transform = transform
+  # Initialize your data from data_path using glob
+  def __init__(self, data_path, transform=None):
+    self.data = glob.glob(data_path + '/*/*.jpg')
+    # suffle data
+    random.shuffle(self.data)
+    self.transform = transform
 
-    def __getitem__(self, index):
-        path_x = self.data[index]
-        x = Image.open(path_x)
-        if self.transform:
-            x = self.transform(x)
-        # [0, 1, 2]: index == -2 => 1;
-        label = self.label(index)
-        return x, torch.tensor(int(label), dtype=torch.long)
+  def __getitem__(self, index):
+    path_x = self.data[index]
+    x = Image.open(path_x)
+    if self.transform:
+      x = self.transform(x)
+    # [0, 1, 2]: index == -2 => 1;
+    label = self.label(index)
+    return x, torch.tensor(int(label), dtype=torch.long)
 
-    def __len__(self):
-        return len(self.data)
+  def __len__(self):
+    return len(self.data)
 
-    def get_image(self, index):
-        path_x = self.data[index]
-        x = Image.open(path_x)
-        y = self.label(index)
-        return x, int(y)
+  def get_image(self, index):
+    path_x = self.data[index]
+    x = Image.open(path_x)
+    y = self.label(index)
+    return x, int(y)
 
-    def label(self, index):
-        path_x = self.data[index]
-        label_str = path_x.split(os.sep)[-2]
-        label_index = int(re.search(r'\d+', label_str).group())
-        return label_index
+  def label(self, index):
+    path_x = self.data[index]
+    label_str = path_x.split(os.sep)[-2]
+    label_index = int(re.search(r'\d+', label_str).group())
+    return label_index
 
-    def labels(self):
-        return sorted(set([path_x.split(os.sep)[-2] for path_x in self.data]))
+  def labels(self):
+    return sorted(set([path_x.split(os.sep)[-2] for path_x in self.data]))
 
 
 class EyesDataset(Dataset):
-    class Category:
-        def __init__(self, id, name, supercategory):
-            self.id = id
-            self.name = name
-            self.supercategory = supercategory
+  class Category:
+    def __init__(self, id, name, supercategory):
+      self.id = id
+      self.name = name
+      self.supercategory = supercategory
 
-    class Annotation:
-        def __init__(self, id, image_id, category_id, bbox, area, segmentation):
-            self.id = id
-            self.image_id = image_id
-            self.category_id = category_id
-            self.bbox = bbox
-            self.area = area
-            self.segmentation = segmentation
+  class Annotation:
+    def __init__(self, id, image_id, category_id, bbox, area, segmentation):
+      self.id = id
+      self.image_id = image_id
+      self.category_id = category_id
+      self.bbox = bbox
+      self.area = area
+      self.segmentation = segmentation
 
-    class Image:
-        def __init__(self, id, file_name, width, height):
-            self.id = id
-            self.file_name = file_name
-            self.width = width
-            self.height = height
+  class Image:
+    def __init__(self, id, file_name, width, height):
+      self.id = id
+      self.file_name = file_name
+      self.width = width
+      self.height = height
 
-    class JsonData:
-        def __init__(self, categories, images, annotations):
-            self.categories = categories
-            self.images = images
-            self.annotations = annotations
+  class JsonData:
+    def __init__(self, categories, images, annotations):
+      self.categories = categories
+      self.images = images
+      self.annotations = annotations
 
-    def __init__(self, data_json_path, transform=None):
-        self.json_data = self.read_image_from_path(data_json_path)
-        self.data = [self.read_image(x) for x in self.json_data.images]
+  def __init__(self, data_json_path, transform=None):
+    self.json_data = self.read_image_from_path(data_json_path)
+    self.data = [self.read_image(x) for x in self.json_data.images]
 
-        # suffle data
-        random.shuffle(self.data)
-        self.transform = transform
+    # suffle data
+    random.shuffle(self.data)
+    self.transform = transform
 
-    def __getitem__(self, index):
-        x, image = self.data[index]
-        if self.transform:
-            x = self.transform(x)
+  def __getitem__(self, index):
+    x, image = self.data[index]
+    if self.transform:
+      x = self.transform(x)
 
-        # get annotation for image
-        annotations = [
-            annotation for annotation in self.json_data.annotations if annotation.image_id == image.id]
-        # get category for annotation
-        categories = [
-            category for category in self.json_data.categories if category.id == annotations[0].category_id]
-        # get label for category
-        label = categories[0].name
-        return x, image
+    # get annotation for image
+    annotations = [
+        annotation for annotation in self.json_data.annotations if annotation.image_id == image.id]
+    # get category for annotation
+    categories = [
+        category for category in self.json_data.categories if category.id == annotations[0].category_id]
+    # get label for category
+    label = categories[0].name
+    return x, image
 
-    def __len__(self):
-        return len(self.data)
+  def __len__(self):
+    return len(self.data)
 
-    def read_image_from_path(self, path):
-        # Read data from path and store it in json_data
-        with open(path, 'r') as f:
-            json_data = json.load(f)
-        # Load categories from json_data
-        categories = []
-        for category in json_data['categories']:
-            categories.append(self.Category(
-                category['id'], category['name'], category['supercategory']))
-        # Load images from json_data
-        images = []
-        for image in json_data['images']:
-            images.append(self.Image(
-                image['id'], image['file_name'], image['width'], image['height']))
-        # Load annotations from json_data
-        annotations = []
-        for annotation in json_data['annotations']:
-            annotations.append(self.Annotation(
-                annotation['id'], annotation['image_id'], annotation['category_id'], annotation['bbox'], annotation['area'], annotation['segmentation']))
+  def read_image_from_path(self, path):
+    # Read data from path and store it in json_data
+    with open(path, 'r') as f:
+      json_data = json.load(f)
+    # Load categories from json_data
+    categories = []
+    for category in json_data['categories']:
+      categories.append(self.Category(
+          category['id'], category['name'], category['supercategory']))
+    # Load images from json_data
+    images = []
+    for image in json_data['images']:
+      images.append(self.Image(
+          image['id'], image['file_name'], image['width'], image['height']))
+    # Load annotations from json_data
+    annotations = []
+    for annotation in json_data['annotations']:
+      annotations.append(self.Annotation(
+          annotation['id'], annotation['image_id'], annotation['category_id'], annotation['bbox'], annotation['area'], annotation['segmentation']))
 
-        return self.JsonData(categories, images, annotations)
+    return self.JsonData(categories, images, annotations)
 
-    def read_image(self, image_path, image: Image):
-        # read image from image.file_name
-        image_path = os.path.join(os.path.dirname(image_path), image.file_name)
-        # read image from image_path
-        x = Image.open(image_path)
-        return x, image
+  def read_image(self, image_path, image: Image):
+    # read image from image.file_name
+    image_path = os.path.join(os.path.dirname(image_path), image.file_name)
+    # read image from image_path
+    x = Image.open(image_path)
+    return x, image
 
 
 class Gi4eDataset(Dataset):
-    def __init__(self, data_path, transform=None):
-        self.offset = 28
-        self.labelsDir = os.path.join(data_path, 'labels')
-        self.imagesDir = os.path.join(data_path, 'images')
-        # load label files from labelsDir
-        self.labelFiles = [label for label in os.listdir(
-            self.labelsDir) if label.endswith('.txt')]
-        # filter the files that match the regex pattern '^d+_w+.txt$'
-        self.labelFiles = [label for label in self.labelFiles if re.match(
-            r'^\d+_image_labels.txt$', label)]
-        # read the annotation from the label files
-        self.data = []
-        for label in self.labelFiles:
-            self.read_annotation(label)
-        # shuffle data
-        #random.shuffle(self.data)
-        print('self.data: ', self.data)
-        #print(len(self.data))
+  def __init__(self, data_path, transform=None):
+    self.offset = 28
+    self.transform = transform
+    self.labelsDir = os.path.join(data_path, 'labels')
+    self.imagesDir = os.path.join(data_path, 'images')
+    # load label files from labelsDir
+    self.labelFiles = [label for label in os.listdir(self.labelsDir) if label.endswith('.txt')]
+    # filter the files that match the regex pattern '^d+_w+.txt$'
+    self.labelFiles = [label for label in self.labelFiles if re.match(r'^\d+_image_labels.txt$', label)]
+    # read the annotation from the label files
+    self.data = []
+    for label in self.labelFiles:
+      self.read_annotations(label)
+    # shuffle data
+    random.shuffle(self.data)
+    print('self.data: ', self.data)
 
-        # self.image_path = []
-        # self.boxes = []
-        # self.labels = []
-        # for i in range(len(self.data)):
-        #     #print('first element:', self.data[i][0])
-        #     self.image_path.append(self.data[i][0])
-        #     #print('second element:', self.data[i][1].keys())
-        #     for key in self.data[i][1].keys():
-        #         #print(key)
-        #         if key == 'boxes':
-        #             self.boxes.append(self.data[i][1][key])
-        #         else:
-        #             self.labels.append(self.data[i][1][key])
+  def __getitem__(self, index):
+    image, target = self.get_image(index)
 
-        #print('self.image_path: ', self.image_path)
-        #print('length of image path:', len(self.image_path))
-        #reset data
-        #self.data = []
-        #self.data.append(self.image_path)
-        #print('self.boxes: ', self.boxes)
-        #print('length of boxes:', len(self.boxes))
+    if self.transform:
+      image = self.transform(image)
 
-        #self._dict = {'boxes': None, 'labels':None}
-        #self._dict['boxes'] = self.boxes[0]
-        #self._dict['labels'] = self.labels[0]
-        #for i in range(1, len(self.boxes)):
-        #    self._dict['boxes'] = torch.cat((self._dict['boxes'], self.boxes[i]), 0)
-        #    self._dict['labels'] = torch.cat((self._dict['labels'], self.labels[i]), 0)
+    return image, target
 
-        #print('self.boxes dict: ', self._dict)
-        #self.data.append(self._dict)
-        #print('self.labels: ', self.labels)
-        #print('length of labels:', len(self.labels))
-        #for i in range(1, len(self.labels)):
+  def __len__(self):
+    return len(self.data)
 
-        #print('self.labels dict: ', self._dict)
-        #self.data.append(self._dict)
+  def get_image(self, index):
+    image_name, target = self.data[index]
+    # get the image path from the imagesDir
+    image_path = os.path.join(self.imagesDir, image_name)
+    # read the image from the image path
+    image = cv2.imread(image_path)
+    # convert the image from BGR to RGB
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    return image, target
 
-        #print('self.data: ', self.data)
-        self.transform = transform
+  def read_annotations(self, label):
+    # get the label path from the labelsDir
+    label_path = os.path.join(self.labelsDir, label)
+    # read the annotations from the label file
+    with open(label_path, 'r') as f:
+      lines = f.readlines()
+    # each line contains the image name and 6 points of the eyes in the image
+    for line in lines:
+      image_id = len(self.data)
+      line = line.strip().split()
+      # get the image name and the 6 points of the eyes
+      image_name = line[0]
+      x1, y1, x2, y2, x3, y3, x4, y4, x5, y5, x6, y6 = map(float, line[1:])
+      # identify the center of each eyes
+      left_eye_center = (x2, y2)
+      right_eye_center = (x5, y5)
+      # calculate the box for left eye
+      left_eye_xmin = x1
+      left_eye_ymin = min(y1, left_eye_center[1] + self.offset)
+      left_eye_xmax = x3
+      left_eye_ymax = max(y3, left_eye_center[1] - self.offset)
+      # calculate the box for right eye
+      right_eye_xmin = x4
+      right_eye_ymin = min(y4, right_eye_center[1] + self.offset)
+      right_eye_xmax = x6
+      right_eye_ymax = max(y6, right_eye_center[1] - self.offset)
 
-    def __getitem__(self, index):
-        x, target = self.data[index]
-        #print('data x nay la gi: ', x)
-        #print('data target nay la gi: ', x)
+      # identify the box for the eyes
+      boxes = [[left_eye_xmin, left_eye_ymin, left_eye_xmax, left_eye_ymax],
+               [right_eye_xmin, right_eye_ymin, right_eye_xmax, right_eye_ymax]]
+      # identify the labels for the eyes
+      labels = [0, 1] # 0: left eye, 1: right eye
+      
+      # identify the target for the eyes
+      target = {}
+      target['boxes'] = torch.tensor(boxes, dtype=torch.float32)
+      target['labels'] = torch.tensor(labels, dtype=torch.int64)
+      target['image_id'] = torch.tensor([image_id])
+      target['area'] = torch.tensor([])
+      target['iscrowd'] = torch.tensor([labels], dtype=torch.int64)
 
-        #x = T.ToTensor()(x)
-        #x = cv2.cvtColor(x, cv2.COLOR_RGB2BGR)
-        try:
-             if self.transform:
-                 x = self.transform(x)
-                 # transform the target['boxes'] to match the transformed image
-             else:
-                 x = torchvision.transforms.ToTensor()(x)
-        except Exception as e:
-             print('Error: ', e)
-             print('index, x: ', index, x)
-             raise e
-
-        #print('boxes: ', x)
-        #print('target: ', target['labels'])
-        return x, target
-
-    def __len__(self):
-        return len(self.data)
-
-    def get_image(self, index):
-        return self.data[index][0]
-
-    def read_annotation(self, label):
-        # read the label file
-        label_path = os.path.join(self.labelsDir, label)
-        print('label_path: ', label_path)
-        with open(label_path, 'r') as f:
-            lines = f.readlines()
-        for i, line in enumerate(lines):
-            values = line.split()
-            file_name = values[0]
-            
-            # read image from file_name
-            # read the values from the line
-            image_path = os.path.join(self.imagesDir, file_name)
-            if not os.path.exists(image_path):
-                continue
-
-            isX, x, y = True, [], []
-            for value in values[1:]:
-                # parse the values to float
-                value = float(value)
-                # append the values to x or y
-                if isX:
-                    x.append(value)
-                else:
-                    y.append(value)
-                # switch between x and y
-                isX = not isX
-
-            x_left_min, y_left_min = (min(x[0], x[2]), min(y[0], y[2] - self.offset) )
-            x_left_max, y_left_max = (max(x[0], x[2]), max(y[0], y[2] + self.offset) )
-
-            x_right_min, y_right_min = (min(x[3], x[5]), min(y[3], y[5]) - self.offset)
-            x_right_max, y_right_max = (max(x[3], x[5]), max(y[3], y[5]) + self.offset)
-
-            boxes = torch.stack([torch.tensor([x_left_min, y_left_min, x_left_max, y_left_max], dtype=torch.float32),
-                                torch.tensor([x_right_min, y_right_min, x_right_max, y_right_max], dtype=torch.float32)])
-            
-            target = {'boxes': boxes, 'labels': torch.tensor([0, 1], dtype=torch.int64)}
-
-            print(image_path)
-
-            self.data.append((Image.open(image_path).convert('RGB'), target))
-            #self.data.append(target)
-
-        f.close()
-
+      # push the image and the target to the data
+      self.data.append((image_name, target))
+      
