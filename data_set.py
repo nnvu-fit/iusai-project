@@ -193,14 +193,14 @@ class Gi4eDataset(Dataset):
       right_eye_center = (x5, y5)
       # calculate the box for left eye
       left_eye_xmin = x1
-      left_eye_ymin = min(y1, left_eye_center[1] + self.offset)
+      left_eye_ymin = left_eye_center[1] + self.offset
       left_eye_xmax = x3
-      left_eye_ymax = max(y3, left_eye_center[1] - self.offset)
+      left_eye_ymax = left_eye_center[1] - self.offset
       # calculate the box for right eye
       right_eye_xmin = x4
-      right_eye_ymin = min(y4, right_eye_center[1] + self.offset)
+      right_eye_ymin = right_eye_center[1] + self.offset
       right_eye_xmax = x6
-      right_eye_ymax = max(y6, right_eye_center[1] - self.offset)
+      right_eye_ymax = right_eye_center[1] - self.offset
 
       # identify the box for the eyes
       boxes = [[left_eye_xmin, left_eye_ymin, left_eye_xmax, left_eye_ymax],
