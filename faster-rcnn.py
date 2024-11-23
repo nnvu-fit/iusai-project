@@ -61,6 +61,8 @@ def main(dataset_path):
     for box in target['boxes']:
         print('box: ', box)
         x1, y1, x2, y2 = box
+        # draw the (0,0) point
+        cv2.circle(img, (0, 0), 5, (0, 255, 0), -1)
         # draw the bounding box
         cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
         # draw x1, y1 coordinates
@@ -75,14 +77,7 @@ def main(dataset_path):
 
     for fold, (train_ids, test_ids) in enumerate(kfold.split(gi4e_dataset)):
         print('Fold: ', fold)
-        # split the dataset into train and test
-        #train_size = int(0.8 * len(gi4e_dataset))
-        #test_size = len(gi4e_dataset) - train_size
-        #train_dataset, test_dataset = torch.utils.data.random_split(
-        #   gi4e_dataset, [train_size, test_size])
-
         print('train_ids: ', train_ids)
-
         print('test_ids: ', test_ids)
 
         # Sample elements randomly from a given list of ids, no replacement.

@@ -187,24 +187,26 @@ class Gi4eDataset(Dataset):
       line = line.strip().split()
       # get the image name and the 6 points of the eyes
       image_name = line[0]
-      x1, y1, x2, y2, x3, y3, x4, y4, x5, y5, x6, y6 = map(float, line[1:])
-      # identify the center of each eyes
-      left_eye_center = (x2, y2)
-      right_eye_center = (x5, y5)
-      # calculate the box for left eye
-      left_eye_xmin = x1
-      left_eye_ymin = left_eye_center[1] + self.offset
-      left_eye_xmax = x3
-      left_eye_ymax = left_eye_center[1] - self.offset
-      # calculate the box for right eye
-      right_eye_xmin = x4
-      right_eye_ymin = right_eye_center[1] + self.offset
-      right_eye_xmax = x6
-      right_eye_ymax = right_eye_center[1] - self.offset
+      eyes = map(float, line[1:])
+      # convert the eyes to the bounding boxes
+      is_x, x, y = True, [], []
+      for eye in eyes:
+        if is_x:
+          x.append(eye)
+        else:
+          y.append(eye)
+        is_x = not is_x
+      # create the bounding boxes for the eyes
+      left_eye_center = (x[1], y[1])
+      right_eye_center = (x[4], y[4])
+      eye_width = eye_height = self.offset
 
-      # identify the box for the eyes
-      boxes = [[left_eye_xmin, left_eye_ymin, left_eye_xmax, left_eye_ymax],
-               [right_eye_xmin, right_eye_ymin, right_eye_xmax, right_eye_ymax]]
+      left_eye_box = [left_eye_center[0] - eye_width, left_eye_center[1] - eye_height,
+                      left_eye_center[0] + eye_width, left_eye_center[1] + eye_height]
+      right_eye_box = [right_eye_center[0] - eye_width, right_eye_center[1] - eye_height,
+                       right_eye_center[0] + eye_width, right_eye_center[1] + eye_height]
+      boxes = [left_eye_box, right_eye_box]
+
       # identify the labels for the eyes
       labels = [0, 1] # 0: left eye, 1: right eye
       
