@@ -12,8 +12,10 @@ current_date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
 # log the training process
 def log_training_process_to_file(log_file, fold, epoch, train_loss, test_loss, accuracy):
+    if not os.path.exists(os.path.dirname(log_file)):
+        os.makedirs(os.path.dirname(log_file))
     with open(log_file, 'a') as f:
-        f.write('Fold: ' + str(fold) + ', Epoch: ' + str(epoch) + ', Train Loss: ' + str(train_loss) + ', Test Loss: ' + str(test_loss) + ', Accuracy: ' + str(accuracy) + '\n')
+        f.write('Fold: ' + str(fold) + ', Epoch: ' + str(epoch) + ', Train Loss: ' + str(train_loss) + ', Test IoU Score: ' + str(test_loss) + ', Accuracy: ' + str(accuracy) + '\n')
 
 
 def evaluate(net, images, device = None):
@@ -35,7 +37,7 @@ def evaluate(net, images, device = None):
         #print('Predicted: ', predicted)
     return outputs
 
-def main(dataset_path):
+def main(dataset_path, is_show_sample_image=False):
 
     # get device to train on
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -61,22 +63,23 @@ def main(dataset_path):
     # gi4e path to the dataset
     gi4e_dataset = Gi4eDataset(dataset_path, transform=transform)
 
-    # show first image
-    img, target = gi4e_dataset.get_image(0)
-    # draw the bounding boxes, each line should have different color
-    for box in target['boxes']:
-        print('box: ', box)
-        x1, y1, x2, y2 = box
-        # draw the (0,0) point
-        cv2.circle(img, (0, 0), 5, (0, 255, 0), -1)
-        # draw the bounding box
-        cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
-        # draw x1, y1 coordinates
-        cv2.circle(img, (int(x1), int(y1)), 5, (255, 0, 0), -1)
-        # draw x2, y2 coordinates
-        cv2.circle(img, (int(x2), int(y2)), 5, (0, 0, 255), -1)
-    cv2.imshow('image', img)
-    cv2.waitKey(0)
+    if is_show_sample_image:
+        # show first image
+        img, target = gi4e_dataset.get_image(0)
+        # draw the bounding boxes, each line should have different color
+        for box in target['boxes']:
+            print('box: ', box)
+            x1, y1, x2, y2 = box
+            # draw the (0,0) point
+            cv2.circle(img, (0, 0), 5, (0, 255, 0), -1)
+            # draw the bounding box
+            cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+            # draw x1, y1 coordinates
+            cv2.circle(img, (int(x1), int(y1)), 5, (255, 0, 0), -1)
+            # draw x2, y2 coordinates
+            cv2.circle(img, (int(x2), int(y2)), 5, (0, 0, 255), -1)
+        cv2.imshow('image', img)
+        cv2.waitKey(0)
 
     # Define the K-fold Cross Validator
     kfold = KFold(n_splits=k_folds, shuffle=True)
@@ -97,9 +100,10 @@ def main(dataset_path):
 
         # train the network
         for epoch in range(10):
-            print('Fold' + str(fold) + ', Epoch: ' + str(epoch))
+            print('Fold ' + str(fold) + ', Epoch: ' + str(epoch))
             net.train()
-            running_loss = 0.0
+            train_loss = 0.0
+            # train the network
             for inputs, targets in train_loader:
                 inputs = inputs.to(device)
                 labels = []
@@ -114,27 +118,64 @@ def main(dataset_path):
                 loss = sum(loss for loss in loss_dict.values())
                 loss.backward()
                 optimizer.step()
-                running_loss += loss.item()
-            print('Fold' + str(fold) + ', Epoch: ' + str(epoch) + ', Train loss: ' + str(running_loss))
+                train_loss += loss.item()
+            print('Fold ' + str(fold) + ', Epoch: ' + str(epoch) + ', Train loss: ' + str(train_loss))
 
             net.eval()
-            correct = 0
-            total = 0
             count = 0
+            test_total_iou = 0.0
+            test_total_score = 0.0
+            # test the network on the test data
             with torch.no_grad():
-                for images, targets in test_loader:
-                    if device is not None:
-                        images = images.to(device)
+                for inputs, targets in test_loader:
+                    inputs = inputs.to(device)
+                    labels = []
+                    for i in range(len(targets['boxes'])):
+                        label = {}
+                        label['boxes'] = targets['boxes'][i].to(device)
+                        label['labels'] = targets['labels'][i].to(device)
+                        labels.append(label)
 
-                    predicted= net(images)
-                    print('predicted: ', predicted)
-                    
-                    # detemine the accuracy, total and correct
-                    
+                    outputs = net(inputs, labels)
 
+                    # calculate the loss for the test data via IoU
+                    for output_index in range(len(outputs)):
+                        output = outputs[output_index]
+                        output_boxes = output['boxes']
+                        output_labels = output['labels']
+                        output_scores = output['scores']
 
-                    #total += test_labels.size(0)
-                    #correct += (predicted == test_labels).sum().item()
+                        target_boxes = labels[output_index]['boxes']
+                        target_labels = labels[output_index]['labels']
+
+                        for box_index in range(len(output_boxes)):
+                            box = output_boxes[box_index]
+                            box_label = output_labels[box_index]
+                            box_score = output_scores.tolist()[box_index]
+
+                            target_label_index = target_labels.tolist().index(box_label)
+                            target_box = target_boxes[target_label_index]
+
+                            # calculate the collision box
+                            collision_box = [max(box[0], target_box[0]), max(box[1], target_box[1]), min(box[2], target_box[2]), min(box[3], target_box[3])]
+                            # calculate the area of the collision box
+                            collision_area = (collision_box[2] - collision_box[0]) * (collision_box[3] - collision_box[1])
+                            # calculate the area of the union box
+                            union_area = (box[2] - box[0]) * (box[3] - box[1]) + (target_box[2] - target_box[0]) * (target_box[3] - target_box[1]) - collision_area
+                            # calculate the IoU
+                            iou = abs(collision_area / union_area)
+
+                            count += 1
+                            test_total_iou += iou.item()
+                            test_total_score += box_score
+            
+            test_avg_iou = test_total_iou / count
+            test_avg_score = test_total_score / count
+            print('Fold ' + str(fold) + ', Epoch: ' + str(epoch) + ', Test average iou: ' + str(test_avg_iou) + ', Test average score: ' + str(test_avg_score))
+
+            # save the report to the log file
+            log_file = './logs/faster_rcnn/' + current_date + '.log'
+            log_training_process_to_file(log_file, fold, epoch, train_loss, test_avg_iou, test_avg_score)
 
             #print('Accuracy of the network on the test images: %d %%' %(100 * correct / total))
             #save the model
@@ -143,10 +184,15 @@ def main(dataset_path):
                 os.makedirs(os.path.dirname(model_path))
             torch.save(net.state_dict(), model_path)
 
+        #     # for testing, break after one epoch
+        #     break
+        # # for testing, break after one fold
+        # break
+
     print('Finished Training')
 
 
 if __name__ == '__main__':
     # dataset_path = './dataset/FasterRCNN/'
-    dataset_path = './datasets//faster-rcnn/gi4e/'
+    dataset_path = './datasets/faster-rcnn/gi4e/'
     main(dataset_path)
