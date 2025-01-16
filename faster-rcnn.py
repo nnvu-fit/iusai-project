@@ -10,6 +10,12 @@ from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from data_set import Gi4eDataset
 current_date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
+# log the training process
+def log_training_process_to_file(log_file, fold, epoch, train_loss, test_loss, accuracy):
+    with open(log_file, 'a') as f:
+        f.write('Fold: ' + str(fold) + ', Epoch: ' + str(epoch) + ', Train Loss: ' + str(train_loss) + ', Test Loss: ' + str(test_loss) + ', Accuracy: ' + str(accuracy) + '\n')
+
+
 def evaluate(net, images, device = None):
     net.eval()
     with torch.no_grad():
@@ -91,7 +97,7 @@ def main(dataset_path):
 
         # train the network
         for epoch in range(10):
-            print('epoch: ', epoch)
+            print('Fold' + str(fold) + ', Epoch: ' + str(epoch))
             net.train()
             running_loss = 0.0
             for inputs, targets in train_loader:
@@ -109,34 +115,26 @@ def main(dataset_path):
                 loss.backward()
                 optimizer.step()
                 running_loss += loss.item()
-                # if i % 20 == 19:
-                #     print('[%d, %5d] loss: %.3f' %
-                #           (epoch + 1, i + 1, running_loss / 20))
-                #     running_loss = 0.0
-            print('epoch loss: ', running_loss)
+            print('Fold' + str(fold) + ', Epoch: ' + str(epoch) + ', Train loss: ' + str(running_loss))
 
             net.eval()
             correct = 0
             total = 0
             count = 0
             with torch.no_grad():
-                  for images, targets in test_loader:
-                      if device is not None:
-                          images = images.to(device)
+                for images, targets in test_loader:
+                    if device is not None:
+                        images = images.to(device)
 
-                      predicted= net(images)
-                      #predicted = evaluate(net, images, device)
-                      count = count + 1
-                      print('image: ', count, '=>', predicted)
-                      test_labels = []
-                      for i in range(len(targets['boxes'])):
-                          label = {}
-                          label['boxes'] = targets['boxes'][i].to(device)
-                          label['labels'] = targets['labels'][i].to(device)
-                          test_labels.append(label)
+                    predicted= net(images)
+                    print('predicted: ', predicted)
+                    
+                    # detemine the accuracy, total and correct
+                    
 
-                      #total += test_labels.size(0)
-                      #correct += (predicted == test_labels).sum().item()
+
+                    #total += test_labels.size(0)
+                    #correct += (predicted == test_labels).sum().item()
 
             #print('Accuracy of the network on the test images: %d %%' %(100 * correct / total))
             #save the model
