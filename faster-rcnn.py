@@ -64,6 +64,7 @@ def main(dataset_path, is_show_sample_image=False):
 
   batch_size = 12
   k_folds = 10
+  epochs = 10
 
   if is_show_sample_image:
     # show first image
@@ -101,7 +102,7 @@ def main(dataset_path, is_show_sample_image=False):
                                               sampler=test_subsampler, batch_size=batch_size, shuffle=False, num_workers=2)
 
     # train the network
-    for epoch in range(100):
+    for epoch in range(epochs):
       net.train()
       train_loss = 0.0
       # train the network
