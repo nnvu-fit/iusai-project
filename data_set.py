@@ -208,7 +208,7 @@ class Gi4eDataset(Dataset):
       boxes = [left_eye_box, right_eye_box]
 
       # identify the labels for the eyes
-      labels = [0, 1] # 0: left eye, 1: right eye
+      labels = [1, 2] # 1: left eye, 2: right eye
       
       # identify the target for the eyes
       target = {}
