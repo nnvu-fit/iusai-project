@@ -8,11 +8,8 @@ from sklearn.model_selection import KFold
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 
 from data_set import Gi4eDataset
-current_date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
 # log the training process
-
-
 def log_training_process_to_file(log_file, fold, epoch, train_loss, test_loss, accuracy):
   if not os.path.exists(os.path.dirname(log_file)):
     os.makedirs(os.path.dirname(log_file))
@@ -41,7 +38,8 @@ def evaluate(net, images, device=None):
   return outputs
 
 
-def main(dataset_path, is_show_sample_image=False):
+def main(dataset_path, k_folds=10, epochs = 10, is_show_sample_image=False, stop_after_one_fold=False):
+  current_date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
   # get device to train on
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -63,8 +61,6 @@ def main(dataset_path, is_show_sample_image=False):
   optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 
   batch_size = 12
-  k_folds = 10
-  epochs = 10
 
   if is_show_sample_image:
     # show first image
@@ -191,8 +187,8 @@ def main(dataset_path, is_show_sample_image=False):
     #   # for testing, break after one epoch
     #   break
 
-    # for testing, break after one fold
-    break
+    if stop_after_one_fold:
+      break
 
   print('Finished Training')
 
@@ -200,4 +196,7 @@ def main(dataset_path, is_show_sample_image=False):
 if __name__ == '__main__':
   # dataset_path = './dataset/FasterRCNN/'
   dataset_path = './datasets/faster-rcnn/gi4e/'
-  main(dataset_path)
+  print('run the main function with the dataset path with 10 folds and 10 epochs')
+  main(dataset_path, 10, 10)
+  print('run the main function with the dataset path with 10 folds and 100 epochs')
+  main(dataset_path, 10, 100, stop_after_one_fold=True)

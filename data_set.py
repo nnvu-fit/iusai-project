@@ -152,7 +152,6 @@ class Gi4eDataset(Dataset):
       self.read_annotations(label)
     # shuffle data
     random.shuffle(self.data)
-    print('self.data: ', self.data)
 
   def __getitem__(self, index):
     image, target = self.get_image(index)
@@ -217,6 +216,11 @@ class Gi4eDataset(Dataset):
       target['image_id'] = torch.tensor([image_id])
       target['area'] = torch.tensor([])
       target['iscrowd'] = torch.tensor([labels], dtype=torch.int64)
+
+      # get user number from the image name
+      user_number = int(re.search(r'\d+', image_name).group())
+      # add the user number to the target
+      target['user_number'] = torch.tensor([user_number])
 
       # push the image and the target to the data
       self.data.append((image_name, target))

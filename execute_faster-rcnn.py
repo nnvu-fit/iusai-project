@@ -1,0 +1,85 @@
+import datetime
+import os
+import torch
+import torchvision
+import cv2
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+from data_set import Gi4eDataset
+
+def main(dataset_path, weights_path, eyes_dataset_path):
+  current_date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+  eyes_dataset_path = os.path.join(eyes_dataset_path, current_date)
+  if not os.path.exists(eyes_dataset_path):
+    os.makedirs(eyes_dataset_path)
+
+  # get device to train on
+  device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+  # load the data
+  transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
+
+  # gi4e path to the dataset
+  gi4e_dataset = Gi4eDataset(dataset_path, transform=transform)
+  
+  # define the optimizer
+  net = torchvision.models.detection.fasterrcnn_resnet50_fpn(weights=None)
+  # weights=torchvision.models.detection.FasterRCNN_ResNet50_FPN_Weights.DEFAULT)
+  num_classes = 3  # 3 classes: background, left eye, right eye (0, 1, 2)
+  in_features = net.roi_heads.box_predictor.cls_score.in_features
+  net.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+
+  # load the model state
+  net.load_state_dict(torch.load(weights_path, map_location=device))
+
+  net = net.to(device)
+
+  batch_size = 12
+  dataloader = torch.utils.data.DataLoader(gi4e_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
+
+  user_number_dict = {}
+
+  net.eval()
+  # extract eyes from the images and labels
+  with torch.no_grad():
+    for (images, targets) in dataloader:
+      images = images.to(device)
+      outputs = net(images)
+
+      user_numbers = [value[0] for value in targets['user_number'].numpy()]
+      print('user_numbers: ', user_numbers)
+      for i, (output) in enumerate(outputs):
+        print('user_numbers length: ', len(user_numbers))
+        print('index: ', i)
+
+        if user_numbers[i] not in user_number_dict.keys():
+          user_number_dict[user_numbers[i]] = 0
+        user_number_dict[user_numbers[i]] += 1
+
+        image = images[i].cpu().permute(1, 2, 0).numpy()
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image_prefix = str(user_numbers[i]) + '_' + str(user_number_dict[user_numbers[i]])
+        # cv2.imshow('image', image)
+        labels = output['labels']
+        for box_index, box in enumerate(output['boxes']):
+          label = labels[box_index].item()
+          label_str = 'left' if label == 1 else 'right'
+          # crop the left eye from the image
+          eye = image[int(box[1]):int(box[3]), int(box[0]):int(box[2])]
+
+          # save the eye image to the file
+          eye_path = os.path.join(eyes_dataset_path, str(user_numbers[i]))
+          if not os.path.exists(eye_path):
+            os.makedirs(eye_path)
+          eye_path = os.path.join(eye_path, image_prefix + '_' + label_str + '.png')
+          print('eye_path: ', eye_path)
+          cv2.imwrite(eye_path, 255*eye)
+
+
+    
+
+
+if __name__ == "__main__":
+  dataset_path = './datasets/faster-rcnn/gi4e/'
+  eyes_dataset_path = './datasets/faster-rcnn/gi4e_eyes/'
+  weights_path = './models/faster_rcnn/20250117_161726/fold_4_epoch_9.pth'
+  main(dataset_path, weights_path, eyes_dataset_path)
