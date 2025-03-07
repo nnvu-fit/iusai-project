@@ -225,3 +225,12 @@ class Gi4eDataset(Dataset):
       # push the image and the target to the data
       self.data.append((image_name, target))
       
+class Gi4eEyesDataset(Dataset):
+  def __init__(self, data_path, transform=None):
+    self.data = glob.glob(data_path + '/*/*.png')
+
+    print(self.data.head())
+    # get all the left eye images
+    self.left_eye_images = [image for image in self.data if 'left' in image]
+    # get all the right eye images
+    self.right_eye_images = [image for image in self.data if 'right' in image]
