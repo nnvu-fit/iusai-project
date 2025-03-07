@@ -71,8 +71,24 @@ def main(dataset_path, weights_path, eyes_dataset_path):
           if not os.path.exists(eye_path):
             os.makedirs(eye_path)
           eye_path = os.path.join(eye_path, image_prefix + '_' + label_str + '.png')
+          if (os.path.exists(eye_path)):
+            eye_path = eye_path.replace('.png', '_1.png')
           print('eye_path: ', eye_path)
-          cv2.imwrite(eye_path, 255*eye)
+          try:
+            if eye.shape[0] == 0 or eye.shape[1] == 0:
+              print('eye shape: ', eye.shape)
+              continue
+            success = cv2.imwrite(eye_path, 255*eye)
+            if not success:
+              print('Error saving the image: ', eye_path)
+              print('eye: ', eye)
+          except Exception as e:
+            print('Error saving the image: ', eye_path)
+            print('eye: ', eye)
+            print('Exception: ', e)
+            cv2.imshow('eye', eye)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
 
 
     
