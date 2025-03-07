@@ -11,8 +11,6 @@ from torchvision import transforms as T
 import cv2
 from PIL import Image
 import os
-import sys
-import numpy as np
 
 
 class ImageDataset(Dataset):
@@ -207,8 +205,8 @@ class Gi4eDataset(Dataset):
       boxes = [left_eye_box, right_eye_box]
 
       # identify the labels for the eyes
-      labels = [1, 2] # 1: left eye, 2: right eye
-      
+      labels = [1, 2]  # 1: left eye, 2: right eye
+
       # identify the target for the eyes
       target = {}
       target['boxes'] = torch.tensor(boxes, dtype=torch.float32)
@@ -224,13 +222,74 @@ class Gi4eDataset(Dataset):
 
       # push the image and the target to the data
       self.data.append((image_name, target))
-      
+
 class Gi4eEyesDataset(Dataset):
   def __init__(self, data_path, transform=None):
     self.data = glob.glob(data_path + '/*/*.png')
 
-    print(self.data.head())
     # get all the left eye images
     self.left_eye_images = [image for image in self.data if 'left' in image]
     # get all the right eye images
     self.right_eye_images = [image for image in self.data if 'right' in image]
+
+    # combine the left and right eye images by concatenating them on the same prefix
+    self.data = []
+    for left_eye in self.left_eye_images:
+      right_eye = left_eye.replace('left', 'right')
+      if right_eye in self.right_eye_images:
+        self.data.append((left_eye, right_eye))
+    # do the same for the right eye images that do not have a corresponding left eye image
+    for right_eye in self.right_eye_images:
+      left_eye = right_eye.replace('right', 'left')
+      if (left_eye not in self.left_eye_images) and ((left_eye, right_eye) not in self.data):
+        self.data.append((left_eye, right_eye))
+
+    # suffle data
+    random.shuffle(self.data)
+
+    if transform:
+      self.transform = transform
+    else:
+      self.transform = T.Compose([T.ToTensor()])
+
+  def __len__(self):
+    return len(self.data)
+
+  def __getitem__(self, index):
+    # get the left and right eye images
+    left_eye, right_eye = self.data[index]
+    
+    # get the label from the left eye image
+    label = left_eye.split(os.sep)[-2]
+    # read the left and right eye images
+    left_eye = Image.open(left_eye)
+    right_eye = Image.open(right_eye)
+
+    # combine the left and right eye images
+    composed_eye = Image.new('RGB', (left_eye.width + right_eye.width, left_eye.height))
+    composed_eye.paste(left_eye, (0, 0))
+    composed_eye.paste(right_eye, (left_eye.width, 0))
+
+    # apply the transform to the composed eye image
+    if self.transform:
+      composed_eye = self.transform(composed_eye)
+
+    return composed_eye, torch.tensor(int(label), dtype=torch.long)
+  
+  def get_image(self, index):
+    left_eye, right_eye = self.data[index]
+    left_eye = Image.open(left_eye)
+    right_eye = Image.open(right_eye)
+    composed_eye = Image.new('RGB', (left_eye.width + right_eye.width, left_eye.height))
+    composed_eye.paste(left_eye, (0, 0))
+    composed_eye.paste(right_eye, (left_eye.width, 0))
+    return composed_eye
+  
+  def label(self, index):
+    left_eye, right_eye = self.data[index]
+    label_str = left_eye.split(os.sep)[-2]
+    label_index = int(re.search(r'\d+', label_str).group())
+    return label_index
+  
+  def labels(self):
+    return sorted(set([left_eye.split(os.sep)[-2] for left_eye, right_eye in self.data]))

@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import torch
 import time
@@ -51,7 +52,7 @@ class ClassifierTrainer:
       
       lost_metric = self.train(train_loader, test_loader, epochs)
       report_metric.append(lost_metric)
-      total_loss += self.score(self.model, test_loader)
+      total_loss += self.score(test_loader)
 
       y_true = []
       y_pred = []
@@ -137,14 +138,14 @@ class ClassifierTrainer:
     Returns:
       float: The average loss on the given dataset.
     """
-    if device is None:
-      device = get_device()
-    self.model.to(device)
+    if self.device is None:
+      self.device = get_device()
+    self.model.to(self.device)
     self.model.eval()
     test_loss = 0.0
     with torch.no_grad():
       for inputs, targets in test_dataset:
-        inputs, targets = inputs.to(device), targets.to(device)
+        inputs, targets = inputs.to(self.device), targets.to(self.device)
         outputs = self.model(inputs)
         loss = self.loss_fn(outputs, targets)
         test_loss += loss.item() * inputs.size(0)
@@ -154,6 +155,12 @@ class ClassifierTrainer:
   def save_report(self, report, confusion):
     model_name = self.model.__class__.__name__ # get model name
     path_valid = "./results/" + model_name + "/"+ str(self.timestamp) +"/fold_" + str(self.current_fold) + ".txt"
+    
+    # create folder if not exist
+    if not os.path.exists(os.path.dirname(path_valid)):
+      os.makedirs(os.path.dirname(path_valid))
+    
+    # save report and confusion matrix
     with open(path_valid, 'w') as f:
         f.write(report)
         f.write('\n')

@@ -2,7 +2,11 @@
 from torchvision import transforms
 import torch
 from torch.utils.data import random_split, DataLoader
+import torchvision
+from torchvision.models import ResNet18_Weights
 from model import CNN, VGGFace
+
+import cv2
 
 #  import self library
 from train import ClassifierTrainer as Trainer
@@ -13,6 +17,11 @@ def doTheTrain(images_path, model):
     # get devices
     transform = transforms.Compose([transforms.Resize((224,224)), transforms.ToTensor()])
     imageDataset = ds.Gi4eEyesDataset(images_path, transform=transform)
+
+    first_image = imageDataset.get_image(0)
+    cv2.imshow('first_image', first_image.permute(1, 2, 0).numpy())
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
     ## define batch_size
     batch_size = 32
@@ -38,11 +47,11 @@ def doTheTrain(images_path, model):
 
 if __name__ == "__main__":
     # init images path for dataset
-    images_path = 'subjects-small/'
+    images_path = './datasets/faster-rcnn/gi4e_eyes/20250307_224145'
 
     models = [
-        # torchvision.models.resnet18(pretrained=True),
-        CNN(24)
+        torchvision.models.resnet18(weights=ResNet18_Weights.DEFAULT),
+        # CNN(24)
     ]
     for model in models:
         doTheTrain(images_path, model)

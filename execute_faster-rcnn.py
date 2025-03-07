@@ -6,7 +6,12 @@ import cv2
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from data_set import Gi4eDataset
 
-def main(dataset_path, weights_path, eyes_dataset_path):
+
+def main(dataset_path, weights_path, eyes_dataset_path, is_log_enabled=False):
+  def log(*values):
+    if is_log_enabled:
+      print(values)
+
   current_date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
   eyes_dataset_path = os.path.join(eyes_dataset_path, current_date)
   if not os.path.exists(eyes_dataset_path):
@@ -46,10 +51,10 @@ def main(dataset_path, weights_path, eyes_dataset_path):
       outputs = net(images)
 
       user_numbers = [value[0] for value in targets['user_number'].numpy()]
-      print('user_numbers: ', user_numbers)
+      log('user_numbers: ', user_numbers)
       for i, (output) in enumerate(outputs):
-        print('user_numbers length: ', len(user_numbers))
-        print('index: ', i)
+        log('user_numbers length: ', len(user_numbers))
+        log('index: ', i)
 
         if user_numbers[i] not in user_number_dict.keys():
           user_number_dict[user_numbers[i]] = 0
@@ -60,7 +65,12 @@ def main(dataset_path, weights_path, eyes_dataset_path):
         image_prefix = str(user_numbers[i]) + '_' + str(user_number_dict[user_numbers[i]])
         # cv2.imshow('image', image)
         labels = output['labels']
+        scrores = output['scores']
+        log('scores: ', scrores)
         for box_index, box in enumerate(output['boxes']):
+          box_score = scrores[box_index].item()
+          if box_score < 0.5:
+            continue
           label = labels[box_index].item()
           label_str = 'left' if label == 1 else 'right'
           # crop the left eye from the image
@@ -71,12 +81,13 @@ def main(dataset_path, weights_path, eyes_dataset_path):
           if not os.path.exists(eye_path):
             os.makedirs(eye_path)
           eye_path = os.path.join(eye_path, image_prefix + '_' + label_str + '.png')
-          if (os.path.exists(eye_path)):
+          while (os.path.exists(eye_path)):
             eye_path = eye_path.replace('.png', '_1.png')
-          print('eye_path: ', eye_path)
+            
+          log('eye_path: ', eye_path)
           try:
             if eye.shape[0] == 0 or eye.shape[1] == 0:
-              print('eye shape: ', eye.shape)
+              log('eye shape: ', eye.shape)
               continue
             success = cv2.imwrite(eye_path, 255*eye)
             if not success:
