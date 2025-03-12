@@ -278,11 +278,10 @@ class Gi4eEyesDataset(Dataset):
   
   def get_image(self, index):
     left_eye, right_eye = self.data[index]
-    left_eye = Image.open(left_eye)
-    right_eye = Image.open(right_eye)
-    composed_eye = Image.new('RGB', (left_eye.width + right_eye.width, left_eye.height))
-    composed_eye.paste(left_eye, (0, 0))
-    composed_eye.paste(right_eye, (left_eye.width, 0))
+    left_eye = cv2.imread(left_eye)
+    right_eye = cv2.imread(right_eye)
+
+    composed_eye = self.compose_eyes(left_eye, right_eye)
     return composed_eye
   
   def label(self, index):
@@ -293,3 +292,11 @@ class Gi4eEyesDataset(Dataset):
   
   def labels(self):
     return sorted(set([left_eye.split(os.sep)[-2] for left_eye, right_eye in self.data]))
+  
+  def compose_eyes(self, left_eye, right_eye):
+    # resize the left and right eye images to the same size
+    left_eye = cv2.resize(left_eye, (64, 64))
+    right_eye = cv2.resize(right_eye, (64, 64))
+    # combine the left and right eye images
+    composed_eye = cv2.hconcat([right_eye, left_eye])
+    return composed_eye

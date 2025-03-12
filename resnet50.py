@@ -19,7 +19,7 @@ def doTheTrain(images_path, model):
     imageDataset = ds.Gi4eEyesDataset(images_path, transform=transform)
 
     first_image = imageDataset.get_image(0)
-    cv2.imshow('first_image', first_image.permute(1, 2, 0).numpy())
+    cv2.imshow('first_image', first_image)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
