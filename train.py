@@ -44,7 +44,7 @@ class ClassifierTrainer:
     report_metric = []
     for fold in range(k):
       self.current_fold = fold
-      print(f'Fold {fold+1}/{k}:', end=' ')
+      print(f'Fold {fold+1}/{k}:')
       train_data = torch.utils.data.Subset(dataset, list(range(fold_size * fold)) + list(range(fold_size * (fold + 1), len(dataset))))
       test_data = torch.utils.data.Subset(dataset, range(fold_size * fold, fold_size * (fold + 1)))
       train_loader = torch.utils.data.DataLoader(train_data, batch_size=32, shuffle=True)
