@@ -4,10 +4,10 @@ import os
 import re
 import random
 import torch
-import torchvision
 from torch.utils.data import Dataset
 from torchvision import transforms as T
 
+import pandas as pd
 import cv2
 from PIL import Image
 import os
@@ -300,3 +300,45 @@ class Gi4eEyesDataset(Dataset):
     # combine the left and right eye images
     composed_eye = cv2.hconcat([right_eye, left_eye])
     return composed_eye
+  
+class YoutubeFacesWithFacialKeypoints(Dataset):
+  def __init__(self, data_path, transform=None):
+    super().__init__()
+    self.data_path = data_path
+    self.transform = transform
+
+    print('data_path: ', data_path)
+
+    # get all files in the data_path
+    file_paths = glob.glob(data_path + '/**', recursive=True)
+
+    label_files = [file for file in file_paths if file.endswith('.csv')]
+    data_paths = [file for file in file_paths if file.endswith('.npz')]
+
+    self.data = []
+    for label_file in label_files:
+      self.read_labels(label_file, data_paths)
+
+  def __len__(self):
+    return len(self.data)
+  
+  def __getitem__(self, index):
+    image, target = self.data[index]
+
+    if self.transform:
+      image = self.transform(image)
+
+    return image, target
+  
+  def read_labels(self, label_file, data_paths):
+    # read the file as a csv file
+    labels = pd.read_csv(label_file)
+    data_paths = pd.DataFrame(data_paths, columns=['VideoPath'])
+    # create a new column for the videoID from the VideoPath
+    data_paths['videoID'] = data_paths['VideoPath'].apply(lambda x: os.path.basename(x).split('.')[0])
+
+    data_infors = labels.join(data_paths.set_index('videoID'), on='videoID')
+
+    for index, row in data_infors.iterrows():
+      
+
