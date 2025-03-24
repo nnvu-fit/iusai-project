@@ -6,7 +6,8 @@ import cv2
 import numpy as np
 import pandas as pd
 
-from IPython.display import YouTubeVideo
+import psutil
+from time import sleep
 
 
 def main(input_path, output_path):
@@ -38,24 +39,34 @@ def main(input_path, output_path):
     index = 0
     max_threads = 10
     while index < number_of_videos:
+        print('------------------------------------')
         # check if cpu usage is less than 80%, then increase the max_threads by 1
         # otherwise, decrease the max_threads by a factor of 2
-        if len(threads) < max_threads:
-            max_threads = int(max_threads + 1)
+        cpu_usage = psutil.cpu_percent()
+        ram_usage = psutil.virtual_memory().percent
+        print('CPU Usage: ', cpu_usage, ' RAM Usage: ', ram_usage)
+        if cpu_usage < 80 and ram_usage < 80:
+            max_threads += 1
         else:
-            max_threads = int(max_threads / 2)
+            max_threads = max_threads // 2
+
         # check if there are any threads that are stopped
         for thread in threads:
             if not thread.is_alive():
                 threads.remove(thread)
-        
-        while len(threads) < max_threads:
+        print('Max Threads: ', max_threads, ' Threads: ', len(threads))
+
+        # check if the number of threads is less than the max_threads and the index is less than the number of videos
+        # then start a new thread
+        # the new thread will extract the frames from the video
+        # and save them in the output folder
+        while len(threads) < max_threads and index < number_of_videos:
             row = file_information.iloc[index]
             videoID = row['videoID']
             label = row['personName']
             file_path = row['file_path']
 
-            print(index, '/', number_of_videos, '- Processing video: ',
+            print(index + 1, '/', number_of_videos, '- Processing video: ',
                   videoID, ' with label: ', label)
 
             output_folder = os.path.join(output_path, label)
@@ -69,6 +80,7 @@ def main(input_path, output_path):
 
             index += 1
 
+        sleep(0.5)
 
 def extract_video_frames(videoID, file_path, output_folder):
     video_file = np.load(file_path)
