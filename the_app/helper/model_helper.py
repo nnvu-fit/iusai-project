@@ -55,7 +55,7 @@ def classify_image(image: bytes, model: nn.Module) -> str:
         return preds.item()    
 
 # get model from model type
-def get_model(model_type: ['ResNet18', 'ResNet34', 'DenseNet121']):
+def get_model(model_type: ['ResNet18', 'ResNet34', 'DenseNet121']): # type: ignore
     model_weight_url = ''
     if model_type in model_type_url_dict:
         model_weight_url = model_type_url_dict[model_type]
