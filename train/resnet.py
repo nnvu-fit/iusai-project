@@ -6,8 +6,8 @@ from torch.utils.data import random_split, DataLoader
 from model import CNN, VGGFace
 
 #  import self library
-from train import Trainer
-import data_set as ds
+from train.trainer import Trainer
+import dataset as ds
 
 def doTheTrain(images_path, model):
 

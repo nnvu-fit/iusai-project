@@ -4,7 +4,7 @@ import torch
 import torchvision
 import cv2
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
-from data_set import Gi4eDataset
+from dataset import Gi4eDataset
 
 
 def main(dataset_path, weights_path, eyes_dataset_path, is_log_enabled=False):

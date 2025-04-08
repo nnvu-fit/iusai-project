@@ -1,16 +1,20 @@
+# import os, sys # to add the parent directory to the path
+import os
+import sys
+
 # Using torchvision to create a dataset
 from torchvision import transforms
 import torch
 from torch.utils.data import random_split, DataLoader
 import torchvision
 from torchvision.models import ResNet50_Weights
-from model import CNN, VGGFace
 
-import cv2
+# add the parent directory to the path
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 #  import self library
-from train import ClassifierTrainer as Trainer
-import data_set as ds
+from trainer import ClassifierTrainer as Trainer
+import dataset as ds # type: ignore
 
 
 def doTheTrain(dataset, model):
@@ -39,7 +43,7 @@ def doTheTrain(dataset, model):
 
 if __name__ == "__main__":
 
-    # init models
+    # init model list of string
     models = [torchvision.models.resnet50(weights=ResNet50_Weights.DEFAULT)]
 
     # init transform for dataset
@@ -54,6 +58,8 @@ if __name__ == "__main__":
     images_path = './datasets/YouTubeFacesWithFacialKeypoints'
     dataset = ds.YoutubeFacesWithFacialKeypoints(
         images_path, transform=transform)
+
+    
 
     # # train model
     # for model in models:

@@ -340,5 +340,27 @@ class YoutubeFacesWithFacialKeypoints(Dataset):
     data_infors = labels.join(data_paths.set_index('videoID'), on='videoID')
 
     for index, row in data_infors.iterrows():
+      # get the video path
+      video_path = row['VideoPath']
+      # get the frame number
+      frame_number = row['FrameNumber']
+      # get the label
+      label = row['Label']
+      # get the keypoints
+      keypoints = row[['X1', 'Y1', 'X2', 'Y2', 'X3', 'Y3']].values
+
+      # read the image from the video path
+      image_path = os.path.join(video_path, f'frame_{frame_number}.jpg')
+      image = cv2.imread(image_path)
+
+      # convert the image from BGR to RGB
+      image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+      # create a target for the image
+      target = {}
+      target['boxes'] = torch.tensor(keypoints, dtype=torch.float32)
+      target['labels'] = torch.tensor([label], dtype=torch.int64)
       
+      # push the image and the target to the data
+      self.data.append((image, target))
 

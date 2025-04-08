@@ -7,7 +7,7 @@ import cv2
 from sklearn.model_selection import KFold
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 
-from data_set import Gi4eDataset
+from dataset import Gi4eDataset
 
 # log the training process
 def log_training_process_to_file(log_file, fold, epoch, train_loss, test_loss, accuracy):
