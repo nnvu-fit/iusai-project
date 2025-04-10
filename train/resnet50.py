@@ -3,6 +3,7 @@ import os
 import sys
 
 # Using torchvision to create a dataset
+import cv2
 from torchvision import transforms
 import torch
 from torch.utils.data import random_split, DataLoader
@@ -43,9 +44,6 @@ def doTheTrain(dataset, model):
 
 if __name__ == "__main__":
 
-    # init model list of string
-    models = [torchvision.models.resnet50(weights=ResNet50_Weights.DEFAULT)]
-
     # init transform for dataset
     transform = transforms.Compose(
         [transforms.Resize((224, 224)), transforms.ToTensor()])
@@ -59,8 +57,13 @@ if __name__ == "__main__":
     dataset = ds.YoutubeFacesWithFacialKeypoints(
         images_path, transform=transform)
 
-    
+    first_image, first_label = dataset[0]
+    print('first_image: ', first_image.shape)
+    print('dataset len: ', len(dataset))
 
-    # # train model
-    # for model in models:
-    #     doTheTrain(dataset, model)
+    # init model list of string
+    models = [torchvision.models.resnet50(weights=ResNet50_Weights.DEFAULT)]
+
+    # train model
+    for model in models:
+        doTheTrain(dataset, model)

@@ -7,6 +7,7 @@ import torch
 from torch.utils.data import Dataset
 from torchvision import transforms as T
 
+import numpy as np
 import pandas as pd
 import cv2
 from PIL import Image
@@ -141,9 +142,11 @@ class Gi4eDataset(Dataset):
     self.labelsDir = os.path.join(data_path, 'labels')
     self.imagesDir = os.path.join(data_path, 'images')
     # load label files from labelsDir
-    self.labelFiles = [label for label in os.listdir(self.labelsDir) if label.endswith('.txt')]
+    self.labelFiles = [label for label in os.listdir(
+        self.labelsDir) if label.endswith('.txt')]
     # filter the files that match the regex pattern '^d+_w+.txt$'
-    self.labelFiles = [label for label in self.labelFiles if re.match(r'^\d+_image_labels.txt$', label)]
+    self.labelFiles = [label for label in self.labelFiles if re.match(
+        r'^\d+_image_labels.txt$', label)]
     # read the annotation from the label files
     self.data = []
     for label in self.labelFiles:
@@ -223,6 +226,7 @@ class Gi4eDataset(Dataset):
       # push the image and the target to the data
       self.data.append((image_name, target))
 
+
 class Gi4eEyesDataset(Dataset):
   def __init__(self, data_path, transform=None):
     self.data = glob.glob(data_path + '/*/*.png')
@@ -258,7 +262,7 @@ class Gi4eEyesDataset(Dataset):
   def __getitem__(self, index):
     # get the left and right eye images
     left_eye, right_eye = self.data[index]
-    
+
     # get the label from the left eye image
     label = left_eye.split(os.sep)[-2]
     # read the left and right eye images
@@ -266,7 +270,8 @@ class Gi4eEyesDataset(Dataset):
     right_eye = Image.open(right_eye)
 
     # combine the left and right eye images
-    composed_eye = Image.new('RGB', (left_eye.width + right_eye.width, left_eye.height))
+    composed_eye = Image.new(
+        'RGB', (left_eye.width + right_eye.width, left_eye.height))
     composed_eye.paste(left_eye, (0, 0))
     composed_eye.paste(right_eye, (left_eye.width, 0))
 
@@ -275,7 +280,7 @@ class Gi4eEyesDataset(Dataset):
       composed_eye = self.transform(composed_eye)
 
     return composed_eye, torch.tensor(int(label), dtype=torch.long)
-  
+
   def get_image(self, index):
     left_eye, right_eye = self.data[index]
     left_eye = cv2.imread(left_eye)
@@ -283,16 +288,16 @@ class Gi4eEyesDataset(Dataset):
 
     composed_eye = self.compose_eyes(left_eye, right_eye)
     return composed_eye
-  
+
   def label(self, index):
     left_eye, right_eye = self.data[index]
     label_str = left_eye.split(os.sep)[-2]
     label_index = int(re.search(r'\d+', label_str).group())
     return label_index
-  
+
   def labels(self):
     return sorted(set([left_eye.split(os.sep)[-2] for left_eye, right_eye in self.data]))
-  
+
   def compose_eyes(self, left_eye, right_eye):
     # resize the left and right eye images to the same size
     left_eye = cv2.resize(left_eye, (64, 64))
@@ -300,67 +305,121 @@ class Gi4eEyesDataset(Dataset):
     # combine the left and right eye images
     composed_eye = cv2.hconcat([right_eye, left_eye])
     return composed_eye
-  
+
+
 class YoutubeFacesWithFacialKeypoints(Dataset):
-  def __init__(self, data_path, transform=None):
+  # define which points need to be connected with a line
+  jawPoints = [0, 17]
+  rigthEyebrowPoints = [17, 22]
+  leftEyebrowPoints = [22, 27]
+  noseRidgePoints = [27, 31]
+  noseBasePoints = [31, 36]
+  rightEyePoints = [36, 42]
+  leftEyePoints = [42, 48]
+  outerMouthPoints = [48, 60]
+  innerMouthPoints = [60, 68]
+
+  def __init__(self, data_path, is_classification=True, transform=None):
     super().__init__()
     self.data_path = data_path
     self.transform = transform
-
-    print('data_path: ', data_path)
+    self.is_classification = is_classification
 
     # get all files in the data_path
     file_paths = glob.glob(data_path + '/**', recursive=True)
 
-    label_files = [file for file in file_paths if file.endswith('.csv')]
-    data_paths = [file for file in file_paths if file.endswith('.npz')]
+    label_files = [file for file in file_paths if file.endswith('.json')]
+    data_paths = [file for file in file_paths if file.endswith('.jpg')]
 
+    # number of label files, number of data paths
+    print('number of label files: ', len(label_files))
+    print('number of data paths: ', len(data_paths))
+    # check if the label files and data paths are the same
     self.data = []
-    for label_file in label_files:
-      self.read_labels(label_file, data_paths)
-
+    
+    annotations = []
+    label_file_count = len(label_files)
+    for index, label_file in enumerate(label_files[:10]):
+      print(index+1, '/', label_file_count, '- label_file: ', label_file)
+      # read the labels from the label file
+      with open(label_file, 'r') as f:
+        annotations.extend(json.load(f))
+    # number of labels
+    print('number of annotations: ', len(annotations))
+    # ------------------------------------------------------------------------------------- #
+    print('-' * 50)
+    # read the annotations from the label files
+    # check if the labels and data paths are the same
+    for index, annotation in enumerate(annotations):
+      if index % 1000 == 0:
+        print('annotation: ', index+1, '/', len(annotations), ' - ', annotation['image_id'], ' - ', annotation['label'])
+      self.read_annotation(annotation, data_paths)
+    # suffle data
+    random.shuffle(self.data)
+    # check if the labels and data paths are the same
+    self.labels = [annotation['label'] for annotation in annotations]
+    self.labels = list(set(self.labels))
+    self.labels.sort()
+    print('number of labels: ', len(self.labels))
+    
   def __len__(self):
     return len(self.data)
-  
+
   def __getitem__(self, index):
-    image, target = self.data[index]
+    # get the image path and target from the data
+    target = self.data[index][1]
+
+    # read the image from the image path
+    image = self.get_image(index)
+    image = Image.fromarray(image)
 
     if self.transform:
       image = self.transform(image)
 
-    return image, target
+    # convert target to tensor
+    label = target['label']
+    target = {
+      'image_id': torch.tensor(self.labels.index(label), dtype=torch.long),
+      'bounding_box': torch.tensor(target['bounding_box'], dtype=torch.float32),
+      'landmarks_2d': torch.tensor(target['landmarks_2d'], dtype=torch.float32),
+      'landmarks_3d': torch.tensor(target['landmarks_3d'], dtype=torch.float32),
+      'label': torch.tensor(self.labels.index(label), dtype=torch.long)
+    }
+
+    return image, target['label'] if self.is_classification else target
   
-  def read_labels(self, label_file, data_paths):
-    # read the file as a csv file
-    labels = pd.read_csv(label_file)
-    data_paths = pd.DataFrame(data_paths, columns=['VideoPath'])
-    # create a new column for the videoID from the VideoPath
-    data_paths['videoID'] = data_paths['VideoPath'].apply(lambda x: os.path.basename(x).split('.')[0])
+  def get_image(self, index):
+    # get the image path and target from the data
+    image_path = self.data[index][0]
+    # read the image from the image path
+    image = cv2.imread(image_path)
+    
+    return image
+  
+  def read_annotation(self, annotation, data_paths):
+    # get image_id, bounding_box, landmarks_2d, landmarks_3d from label
+    image_id = annotation['image_id']
+    bounding_box = annotation['bounding_box']
+    landmarks_2d = annotation['landmarks_2d']
+    landmarks_3d = annotation['landmarks_3d']
+    # get the image path from the data_paths
+    image_path = [path for path in data_paths if image_id in path]
+    if len(image_path) == 0:
+      print('image_path not found: ', image_id)
+      return
+    image_path = image_path[0]
 
-    data_infors = labels.join(data_paths.set_index('videoID'), on='videoID')
+    # create the target for the image
+    target = {}
+    target['image_id'] = image_id
+    target['bounding_box'] = bounding_box
+    target['landmarks_2d'] = landmarks_2d
+    target['landmarks_3d'] = landmarks_3d
+    target['label'] = annotation['label']
 
-    for index, row in data_infors.iterrows():
-      # get the video path
-      video_path = row['VideoPath']
-      # get the frame number
-      frame_number = row['FrameNumber']
-      # get the label
-      label = row['Label']
-      # get the keypoints
-      keypoints = row[['X1', 'Y1', 'X2', 'Y2', 'X3', 'Y3']].values
+    # add the image path and target to the data
+    self.data.append((image_path, target))
 
-      # read the image from the video path
-      image_path = os.path.join(video_path, f'frame_{frame_number}.jpg')
-      image = cv2.imread(image_path)
-
-      # convert the image from BGR to RGB
-      image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-      # create a target for the image
-      target = {}
-      target['boxes'] = torch.tensor(keypoints, dtype=torch.float32)
-      target['labels'] = torch.tensor([label], dtype=torch.int64)
-      
-      # push the image and the target to the data
-      self.data.append((image, target))
+  def labels(self):
+    return self.labels
 
