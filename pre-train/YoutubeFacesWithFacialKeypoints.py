@@ -1,4 +1,5 @@
 import glob
+import json
 import os
 import threading
 
@@ -8,6 +9,17 @@ import pandas as pd
 
 import psutil
 from time import sleep
+
+# Extend the JSONEncoder class
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        return json.JSONEncoder.default(self, obj)
 
 
 def main(input_path, output_path):
@@ -82,10 +94,19 @@ def main(input_path, output_path):
 
         sleep(0.5)
 
-def extract_video_frames(videoID, file_path, output_folder):
-    video_file = np.load(file_path)
 
-    colorImages = video_file['colorImages']
+def extract_video_frames(videoID, file_path, output_folder):
+    video = np.load(file_path)
+
+    # get the color images from the video
+    colorImages = video['colorImages']
+    # get the bounding boxes, landmarks 2D and landmarks 3D from the video
+    bounding_boxes = video['boundingBox']
+    landmarks_2d = video['landmarks2D']
+    landmarks_3d = video['landmarks3D']
+
+    # define the annotations for the video
+    annotations = []
     for image_index in range(colorImages.shape[3]):
         image = colorImages[:, :, :, image_index]
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -93,10 +114,25 @@ def extract_video_frames(videoID, file_path, output_folder):
             output_folder, videoID + '_frame_' + str(image_index) + '.jpg')
         if not os.path.exists(image_path):
             cv2.imwrite(image_path, image)
+        annotations.append({
+            'image_id': videoID + '_frame_' + str(image_index),
+            'bounding_box': bounding_boxes[:, :, image_index],
+            'landmarks_2d': landmarks_2d[:, :, image_index],
+
+            'landmarks_3d': landmarks_3d[:, :, image_index]
+        })
+
+    # save the annotations in a json file
+    annotations_path = os.path.join(
+        output_folder, videoID + '_annotations.json')
+    if not os.path.exists(annotations_path):
+        with open(annotations_path, 'w') as f:
+            annotation_json = json.dumps(annotations, cls=NumpyEncoder)
+            f.write(annotation_json)
 
 
 if __name__ == '__main__':
-    input_path = '../data/YouTubeFacesWithFacialKeypoints'
-    output_path = '../datasets/YouTubeFacesWithFacialKeypoints'
+    input_path = './data/YouTubeFacesWithFacialKeypoints'
+    output_path = './datasets/YouTubeFacesWithFacialKeypoints'
 
     main(input_path, output_path)
