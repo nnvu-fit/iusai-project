@@ -87,7 +87,7 @@ def main(input_path, output_path):
 
             threads.append(threading.Thread(
                 target=extract_video_frames,
-                args=(videoID, file_path, output_folder)))
+                args=(videoID, label, file_path, output_folder)))
             threads[-1].start()
 
             index += 1
@@ -95,7 +95,7 @@ def main(input_path, output_path):
         sleep(0.5)
 
 
-def extract_video_frames(videoID, file_path, output_folder):
+def extract_video_frames(videoID, label, file_path, output_folder):
     video = np.load(file_path)
 
     # get the color images from the video
@@ -115,10 +115,10 @@ def extract_video_frames(videoID, file_path, output_folder):
         if not os.path.exists(image_path):
             cv2.imwrite(image_path, image)
         annotations.append({
+            'label': label,
             'image_id': videoID + '_frame_' + str(image_index),
             'bounding_box': bounding_boxes[:, :, image_index],
             'landmarks_2d': landmarks_2d[:, :, image_index],
-
             'landmarks_3d': landmarks_3d[:, :, image_index]
         })
 
