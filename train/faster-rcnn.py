@@ -1,5 +1,7 @@
-import datetime
 import os
+import sys
+
+import datetime
 import torch
 import torch.optim as optim
 import torchvision
@@ -7,51 +9,75 @@ import cv2
 from sklearn.model_selection import KFold
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 
-from dataset import Gi4eDataset
+# add the parent directory to the path
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+import dataset as ds
 
-# log the training process
+k_folds = 10
+epochs = 10
+
+
 def log_training_process_to_file(log_file, fold, epoch, train_loss, test_loss, accuracy):
+  """
+  Logs the training process details to a specified file.
+
+  Args:
+    log_file (str): Path to the log file.
+    fold (int): Current fold number in K-Fold cross-validation.
+    epoch (int): Current epoch number.
+    train_loss (float): Training loss for the current epoch.
+    test_loss (float): Test IoU score for the current epoch.
+    accuracy (float): Accuracy or average score for the current epoch.
+
+  Returns:
+    None
+  """
+  # create the log file if it does not exist
   if not os.path.exists(os.path.dirname(log_file)):
     os.makedirs(os.path.dirname(log_file))
+  # create the log file
   with open(log_file, 'a') as f:
     f.write('Fold: ' + str(fold) + ', Epoch: ' + str(epoch) + ', Train Loss: ' + str(train_loss) +
             ', Test IoU Score: ' + str(test_loss) + ', Accuracy: ' + str(accuracy) + '\n')
 
 
 def evaluate(net, images, device=None):
+  """
+  Evaluates the given model on a batch of images.
+
+  Args:
+    net (torch.nn.Module): The trained Faster R-CNN model.
+    images (torch.Tensor): A batch of images to evaluate.
+    device (torch.device, optional): The device to run the evaluation on (e.g., 'cuda' or 'cpu').
+
+  Returns:
+    list: A list of dictionaries containing the outputs for each image, including bounding boxes, labels, and scores.
+  """
+  # set the model to evaluation mode
   net.eval()
   with torch.no_grad():
+    # move the images to the device if specified
     if device is not None:
       images = images.to(device)
-
+    # get the outputs from the model
     outputs = net(images)
-
-    # print(outputs)
-
+    # initialize an empty list to store the scores
     scores = []
-
+    # iterate through the outputs and extract the scores
     for output in outputs:
       scores.append(output['scores'])
-
-    # _, predicted = torch.max(scores, 1)
-    # print('Predicted: ', predicted)
+  # return the outputs
   return outputs
 
 
-def main(dataset_path, k_folds=10, epochs = 10, is_show_sample_image=False, stop_after_one_fold=False):
+def main(dataset, is_show_sample_image=False, stop_after_one_fold=False):
   current_date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
-  # get device to train on
+  # get device where the code will run
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-  # load the data
-  transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
-
-  # gi4e path to the dataset
-  gi4e_dataset = Gi4eDataset(dataset_path, transform=transform)
-
   # define the optimizer
-  net = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
+  net = torchvision.models.detection.fasterrcnn_resnet50_fpn(weights=torchvision.models.detection.FasterRCNN_ResNet50_FPN_Weights.DEFAULT)
   # weights=torchvision.models.detection.FasterRCNN_ResNet50_FPN_Weights.DEFAULT)
   num_classes = 3  # 3 classes: background, left eye, right eye (0, 1, 2)
   in_features = net.roi_heads.box_predictor.cls_score.in_features
@@ -64,7 +90,7 @@ def main(dataset_path, k_folds=10, epochs = 10, is_show_sample_image=False, stop
 
   if is_show_sample_image:
     # show first image
-    img, target = gi4e_dataset.get_image(0)
+    img, target = dataset.get_image(0)
     # draw the bounding boxes, each line should have different color
     for box in target['boxes']:
       print('box: ', box)
@@ -72,7 +98,8 @@ def main(dataset_path, k_folds=10, epochs = 10, is_show_sample_image=False, stop
       # draw the (0,0) point
       cv2.circle(img, (0, 0), 5, (0, 255, 0), -1)
       # draw the bounding box
-      cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+      cv2.rectangle(img, (int(x1), int(y1)),
+                    (int(x2), int(y2)), (0, 255, 0), 2)
       # draw x1, y1 coordinates
       cv2.circle(img, (int(x1), int(y1)), 5, (255, 0, 0), -1)
       # draw x2, y2 coordinates
@@ -83,7 +110,7 @@ def main(dataset_path, k_folds=10, epochs = 10, is_show_sample_image=False, stop
   # Define the K-fold Cross Validator
   kfold = KFold(n_splits=k_folds, shuffle=True)
 
-  for fold, (train_ids, test_ids) in enumerate(kfold.split(gi4e_dataset)):
+  for fold, (train_ids, test_ids) in enumerate(kfold.split(dataset)):
     print('Fold: ', fold)
     print('train_ids: ', train_ids)
     print('test_ids: ', test_ids)
@@ -92,9 +119,9 @@ def main(dataset_path, k_folds=10, epochs = 10, is_show_sample_image=False, stop
     train_subsampler = torch.utils.data.SubsetRandomSampler(train_ids)
     test_subsampler = torch.utils.data.SubsetRandomSampler(test_ids)
 
-    train_loader = torch.utils.data.DataLoader(dataset=gi4e_dataset,
+    train_loader = torch.utils.data.DataLoader(dataset=dataset,
                                                sampler=train_subsampler, batch_size=batch_size, shuffle=False, num_workers=2)
-    test_loader = torch.utils.data.DataLoader(dataset=gi4e_dataset,
+    test_loader = torch.utils.data.DataLoader(dataset=dataset,
                                               sampler=test_subsampler, batch_size=batch_size, shuffle=False, num_workers=2)
 
     # train the network
@@ -157,7 +184,8 @@ def main(dataset_path, k_folds=10, epochs = 10, is_show_sample_image=False, stop
               collision_box = [max(box[0], target_box[0]), max(box[1], target_box[1]),
                                min(box[2], target_box[2]), min(box[3], target_box[3])]
               # calculate the area of the collision box
-              collision_area = (collision_box[2] - collision_box[0]) * (collision_box[3] - collision_box[1])
+              collision_area = (
+                  collision_box[2] - collision_box[0]) * (collision_box[3] - collision_box[1])
               # calculate the area of the union box
               union_area = (box[2] - box[0]) * (box[3] - box[1]) + (target_box[2] - target_box[0]) * \
                   (target_box[3] - target_box[1]) - collision_area
@@ -175,11 +203,13 @@ def main(dataset_path, k_folds=10, epochs = 10, is_show_sample_image=False, stop
 
       # save the report to the log file
       log_file = './logs/faster_rcnn/' + current_date + '.log'
-      log_training_process_to_file(log_file, fold, epoch, train_loss, test_avg_iou, test_avg_score)
+      log_training_process_to_file(
+          log_file, fold, epoch, train_loss, test_avg_iou, test_avg_score)
 
       # print('Accuracy of the network on the test images: %d %%' %(100 * correct / total))
       # save the model
-      model_path = './models/faster_rcnn/' + current_date + '/fold_' + str(fold) + '_epoch_' + str(epoch) + '.pth'
+      model_path = './models/faster_rcnn/' + current_date + \
+          '/fold_' + str(fold) + '_epoch_' + str(epoch) + '.pth'
       if not os.path.exists(os.path.dirname(model_path)):
         os.makedirs(os.path.dirname(model_path))
       torch.save(net.state_dict(), model_path)
@@ -194,9 +224,29 @@ def main(dataset_path, k_folds=10, epochs = 10, is_show_sample_image=False, stop
 
 
 if __name__ == '__main__':
+  # set the transform for the dataset
+  transform = torchvision.transforms.Compose(
+      [torchvision.transforms.ToTensor()])
+
+  # train the network with the dataset path of gi4e
+  # set the dataset path to the gi4e dataset
   # dataset_path = './dataset/FasterRCNN/'
-  dataset_path = './datasets/faster-rcnn/gi4e/'
+  dataset_path = './datasets/GI4E/'
+  # gi4e path to the dataset
+  gi4e_dataset = ds.Gi4eDataset(dataset_path, transform=transform)
+  print('Train the network with the gi4e dataset')
   print('run the main function with the dataset path with 10 folds and 10 epochs')
-  main(dataset_path, 10, 10)
+  main(gi4e_dataset)
   print('run the main function with the dataset path with 10 folds and 100 epochs')
-  main(dataset_path, 10, 100, stop_after_one_fold=True)
+  main(gi4e_dataset, stop_after_one_fold=True)
+
+  # train the network with the dataset path of YouTubeFacesWithFacialKeypoints
+  dataset_path = '.\datasets\YouTubeFacesWithFacialKeypoints'
+  # YouTubeFacesWithFacialKeypoints path to the dataset
+  youtube_faces_dataset = ds.YoutubeFacesWithFacialKeypoints(
+      dataset_path, transform=transform)
+  print('Train the network with the youtube faces dataset')
+  print('run the main function with the dataset path with 10 folds and 10 epochs')
+  main(youtube_faces_dataset)
+  print('run the main function with the dataset path with 10 folds and 100 epochs')
+  main(youtube_faces_dataset, stop_after_one_fold=True)

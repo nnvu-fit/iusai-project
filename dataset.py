@@ -376,6 +376,26 @@ class YoutubeFacesWithFacialKeypoints(Dataset):
     if self.transform:
       image = self.transform(image)
 
+    # get left_eye_points, right_eye_points from landmarks_2d
+    left_eye_points = target['landmarks_2d'][YoutubeFacesWithFacialKeypoints.leftEyePoints[0]:YoutubeFacesWithFacialKeypoints.leftEyePoints[1]]
+    right_eye_points = target['landmarks_2d'][YoutubeFacesWithFacialKeypoints.rightEyePoints[0]:YoutubeFacesWithFacialKeypoints.rightEyePoints[1]]
+    # from the eye points, it's geometric center of the eye
+    left_eye_center = np.mean(left_eye_points, axis=0)
+    right_eye_center = np.mean(right_eye_points, axis=0)
+    # expose the left_eye_center and right_eye_center to the 32x32 image
+    left_eye_center = (left_eye_center[0] - 32, left_eye_center[1] - 32)
+    right_eye_center = (right_eye_center[0] - 32, right_eye_center[1] - 32)
+    # get the bounding box from the left_eye_center and right_eye_center
+    left_eye_box = [left_eye_center[0] - 32, left_eye_center[1] - 32,
+                    left_eye_center[0] + 32, left_eye_center[1] + 32]
+    right_eye_box = [right_eye_center[0] - 32, right_eye_center[1] - 32,
+                     right_eye_center[0] + 32, right_eye_center[1] + 32]
+    # get the bounding box from the left_eye_box and right_eye_box
+    boxes = [left_eye_box, right_eye_box]
+    # get the labels from the target
+    labels = [1, 2]  # 1: left eye, 2: right eye
+    
+
     # convert target to tensor
     label = target['label']
     target = {
@@ -383,7 +403,9 @@ class YoutubeFacesWithFacialKeypoints(Dataset):
       'bounding_box': torch.tensor(target['bounding_box'], dtype=torch.float32),
       'landmarks_2d': torch.tensor(target['landmarks_2d'], dtype=torch.float32),
       'landmarks_3d': torch.tensor(target['landmarks_3d'], dtype=torch.float32),
-      'label': torch.tensor(self.labels.index(label), dtype=torch.long)
+      'label': torch.tensor(self.labels.index(label), dtype=torch.long),
+      'boxes': torch.tensor(boxes, dtype=torch.float32),
+      'labels': torch.tensor(labels, dtype=torch.int64),
     }
 
     return image, target['label'] if self.is_classification else target
