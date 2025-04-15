@@ -1,9 +1,14 @@
 import datetime
 import os
+import sys
 import torch
 import torchvision
 import cv2
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+
+
+# add the parent directory to the path
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from dataset import Gi4eDataset
 
 
@@ -34,7 +39,7 @@ def main(dataset_path, weights_path, eyes_dataset_path, is_log_enabled=False):
   net.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
 
   # load the model state
-  net.load_state_dict(torch.load(weights_path, map_location=device))
+  net.load_state_dict(torch.load(weights_path, map_location=device, weights_only=False))
 
   net = net.to(device)
 
@@ -102,11 +107,11 @@ def main(dataset_path, weights_path, eyes_dataset_path, is_log_enabled=False):
             cv2.destroyAllWindows()
 
 
-    
+
 
 
 if __name__ == "__main__":
-  dataset_path = './datasets/faster-rcnn/gi4e/'
-  eyes_dataset_path = './datasets/faster-rcnn/gi4e_eyes/'
+  dataset_path = './datasets/gi4e/'
+  eyes_dataset_path = './datasets/gi4e_eyes/'
   weights_path = './models/faster_rcnn/20250117_161726/fold_4_epoch_9.pth'
   main(dataset_path, weights_path, eyes_dataset_path)

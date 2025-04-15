@@ -319,7 +319,12 @@ class YoutubeFacesWithFacialKeypoints(Dataset):
   outerMouthPoints = [48, 60]
   innerMouthPoints = [60, 68]
 
-  def __init__(self, data_path, is_classification=True, transform=None):
+  def __init__(self, data_path, is_classification=True, transform=None, number_of_samples=None):
+    """
+    Args:
+        data_path (string): Path to the dataset.
+        transform (callable, optional): Optional transform to be applied on a sample.
+    """
     super().__init__()
     self.data_path = data_path
     self.transform = transform
@@ -336,10 +341,14 @@ class YoutubeFacesWithFacialKeypoints(Dataset):
     print('number of data paths: ', len(data_paths))
     # check if the label files and data paths are the same
     self.data = []
-    
+
     annotations = []
     label_file_count = len(label_files)
-    for index, label_file in enumerate(label_files[:10]):
+    if number_of_samples is not None:
+      label_file_count = min(label_file_count, number_of_samples)
+      label_files = label_files[:label_file_count]
+    # read the labels from the label files
+    for index, label_file in enumerate(label_files):
       print(index+1, '/', label_file_count, '- label_file: ', label_file)
       # read the labels from the label file
       with open(label_file, 'r') as f:
@@ -354,6 +363,10 @@ class YoutubeFacesWithFacialKeypoints(Dataset):
       if index % 1000 == 0:
         print('annotation: ', index+1, '/', len(annotations), ' - ', annotation['image_id'], ' - ', annotation['label'])
       self.read_annotation(annotation, data_paths)
+    if len(annotations) % 1000 != 0:
+      print('annotation: ', index+1, '/', len(annotations), ' - ', annotation['image_id'], ' - ', annotation['label'])
+    # ------------------------------------------------------------------------------------- #
+    print('-' * 50)
     # suffle data
     random.shuffle(self.data)
     # check if the labels and data paths are the same
@@ -361,17 +374,13 @@ class YoutubeFacesWithFacialKeypoints(Dataset):
     self.labels = list(set(self.labels))
     self.labels.sort()
     print('number of labels: ', len(self.labels))
-    
+
   def __len__(self):
     return len(self.data)
 
   def __getitem__(self, index):
     # get the image path and target from the data
-    target = self.data[index][1]
-
-    # read the image from the image path
-    image = self.get_image(index)
-    image = Image.fromarray(image)
+    image, target = self.get_image(index, include_target=True)
 
     if self.transform:
       image = self.transform(image)
@@ -394,30 +403,29 @@ class YoutubeFacesWithFacialKeypoints(Dataset):
     boxes = [left_eye_box, right_eye_box]
     # get the labels from the target
     labels = [1, 2]  # 1: left eye, 2: right eye
-    
 
     # convert target to tensor
     label = target['label']
     target = {
-      'image_id': torch.tensor(self.labels.index(label), dtype=torch.long),
-      'bounding_box': torch.tensor(target['bounding_box'], dtype=torch.float32),
-      'landmarks_2d': torch.tensor(target['landmarks_2d'], dtype=torch.float32),
-      'landmarks_3d': torch.tensor(target['landmarks_3d'], dtype=torch.float32),
-      'label': torch.tensor(self.labels.index(label), dtype=torch.long),
-      'boxes': torch.tensor(boxes, dtype=torch.float32),
-      'labels': torch.tensor(labels, dtype=torch.int64),
+        'image_id': torch.tensor(self.labels.index(label), dtype=torch.long),
+        'bounding_box': torch.tensor(target['bounding_box'], dtype=torch.float32),
+        'landmarks_2d': torch.tensor(target['landmarks_2d'], dtype=torch.float32),
+        'landmarks_3d': torch.tensor(target['landmarks_3d'], dtype=torch.float32),
+        'label': torch.tensor(self.labels.index(label), dtype=torch.long),
+        'boxes': torch.tensor(boxes, dtype=torch.float32),
+        'labels': torch.tensor(labels, dtype=torch.int64),
     }
 
     return image, target['label'] if self.is_classification else target
-  
-  def get_image(self, index):
+
+  def get_image(self, index, include_target=False):
     # get the image path and target from the data
-    image_path = self.data[index][0]
+    image_path, target = self.data[index]
     # read the image from the image path
     image = cv2.imread(image_path)
-    
-    return image
-  
+
+    return (image, target) if include_target else image
+
   def read_annotation(self, annotation, data_paths):
     # get image_id, bounding_box, landmarks_2d, landmarks_3d from label
     image_id = annotation['image_id']
@@ -444,4 +452,3 @@ class YoutubeFacesWithFacialKeypoints(Dataset):
 
   def labels(self):
     return self.labels
-

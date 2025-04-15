@@ -133,6 +133,6 @@ def extract_video_frames(videoID, label, file_path, output_folder):
 
 if __name__ == '__main__':
     input_path = './data/YouTubeFacesWithFacialKeypoints'
-    output_path = './datasets/YouTubeFacesWithFacialKeypoints'
+    output_path = 'C:/Users/nnvuf/Workspace/datasets/YouTubeFacesWithFacialKeypoints'
 
     main(input_path, output_path)

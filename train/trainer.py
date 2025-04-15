@@ -4,6 +4,26 @@ import torch
 import time
 from sklearn.metrics import classification_report, confusion_matrix
 
+def collate_fn(batch):
+    """
+    Custom collate function for DataLoader that handles variable-sized inputs.
+    Args:
+        batch: A list of tuples (image, target)
+    Returns:
+        A tuple of (images, targets) where images is a tensor and targets is a list of dicts
+    """
+    images = []
+    targets = []
+    
+    for image, target in batch:
+        images.append(image)
+        targets.append(target)
+    
+    # Stack images along a new batch dimension
+    images = torch.stack(images, 0)
+    
+    return images, targets
+
 class ClassifierTrainer:
   def __init__(self, model, optimizer, loss_fn, random_seed_value=None, device=None):
     self.model = model

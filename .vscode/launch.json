@@ -5,30 +5,25 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Python: Remote Attach",
-      "type": "python",
-      "request": "attach",
-      "connect": {
-        "host": "localhost",
-        "port": 3000
-      },
-      "pathMappings": [
-        {
-          "localRoot": "${workspaceFolder}",
-          "remoteRoot": "."
-        }
-      ],
-      "justMyCode": true
+      "name": "Python: Debug File",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Python: Debug Faster-RCNN",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "./train/faster-rcnn.py",
+      "console": "integratedTerminal"
     },
     {
       "name": "Streamlit: Local App",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "module": "streamlit",
-      "args": [
-        "run",
-        "${workspaceFolder}/the_app/streamlit_app.py"
-      ],
+      "args": ["run", "${workspaceFolder}/the_app/streamlit_app.py"],
       "justMyCode": true
     }
   ]

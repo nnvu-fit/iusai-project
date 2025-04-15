@@ -11,6 +11,7 @@ from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 
 # add the parent directory to the path
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+import trainer
 import dataset as ds
 
 k_folds = 10
@@ -77,7 +78,8 @@ def main(dataset, is_show_sample_image=False, stop_after_one_fold=False):
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
   # define the optimizer
-  net = torchvision.models.detection.fasterrcnn_resnet50_fpn(weights=torchvision.models.detection.FasterRCNN_ResNet50_FPN_Weights.DEFAULT)
+  net = torchvision.models.detection.fasterrcnn_resnet50_fpn(
+      weights=torchvision.models.detection.FasterRCNN_ResNet50_FPN_Weights.DEFAULT)
   # weights=torchvision.models.detection.FasterRCNN_ResNet50_FPN_Weights.DEFAULT)
   num_classes = 3  # 3 classes: background, left eye, right eye (0, 1, 2)
   in_features = net.roi_heads.box_predictor.cls_score.in_features
@@ -120,23 +122,35 @@ def main(dataset, is_show_sample_image=False, stop_after_one_fold=False):
     test_subsampler = torch.utils.data.SubsetRandomSampler(test_ids)
 
     train_loader = torch.utils.data.DataLoader(dataset=dataset,
-                                               sampler=train_subsampler, batch_size=batch_size, shuffle=False, num_workers=2)
+                                               sampler=train_subsampler,
+                                               batch_size=batch_size,
+                                               shuffle=False,
+                                               num_workers=2,
+                                               collate_fn=trainer.collate_fn)
     test_loader = torch.utils.data.DataLoader(dataset=dataset,
-                                              sampler=test_subsampler, batch_size=batch_size, shuffle=False, num_workers=2)
+                                              sampler=test_subsampler,
+                                              batch_size=batch_size,
+                                              shuffle=False,
+                                              num_workers=2,
+                                              collate_fn=trainer.collate_fn)
 
     # train the network
+    fold_start_time = datetime.datetime.now()
     for epoch in range(epochs):
+      epoch_start_time = datetime.datetime.now()
       net.train()
       train_loss = 0.0
       # train the network
       for inputs, targets in train_loader:
         inputs = inputs.to(device)
         labels = []
-        for i in range(len(targets['boxes'])):
+        for target in targets:
           label = {}
-          label['boxes'] = targets['boxes'][i].to(device)
-          label['labels'] = targets['labels'][i].to(device)
+          label['boxes'] = target['boxes'].to(device)
+          label['labels'] = target['labels'].to(device)
           labels.append(label)
+
+        # zero the parameter gradients
         optimizer.zero_grad()
 
         loss_dict = net(inputs, labels)
@@ -144,7 +158,10 @@ def main(dataset, is_show_sample_image=False, stop_after_one_fold=False):
         loss.backward()
         optimizer.step()
         train_loss += loss.item()
-
+      epoch_end_time = datetime.datetime.now()
+      epoch_duration = epoch_end_time - epoch_start_time
+      print('Fold ' + str(fold) + ', Epoch: ' + str(epoch) +
+            ', Duration: ' + str(epoch_duration) + ', Train loss: ' + str(train_loss))
       net.eval()
       count = 0
       test_total_iou = 0.0
@@ -154,10 +171,10 @@ def main(dataset, is_show_sample_image=False, stop_after_one_fold=False):
         for inputs, targets in test_loader:
           inputs = inputs.to(device)
           labels = []
-          for i in range(len(targets['boxes'])):
+          for target in targets:
             label = {}
-            label['boxes'] = targets['boxes'][i].to(device)
-            label['labels'] = targets['labels'][i].to(device)
+            label['boxes'] = target['boxes'].to(device)
+            label['labels'] = target['labels'].to(device)
             labels.append(label)
 
           outputs = net(inputs, labels)
@@ -216,6 +233,9 @@ def main(dataset, is_show_sample_image=False, stop_after_one_fold=False):
 
     #   # for testing, break after one epoch
     #   break
+    fold_end_time = datetime.datetime.now()
+    fold_duration = fold_end_time - fold_start_time
+    print('Fold ' + str(fold) + ' duration: ' + str(fold_duration))
 
     if stop_after_one_fold:
       break
@@ -226,25 +246,28 @@ def main(dataset, is_show_sample_image=False, stop_after_one_fold=False):
 if __name__ == '__main__':
   # set the transform for the dataset
   transform = torchvision.transforms.Compose(
-      [torchvision.transforms.ToTensor()])
+      [
+          torchvision.transforms.ToPILImage(),
+          torchvision.transforms.Resize((224, 224)),
+          torchvision.transforms.ToTensor()
+      ])
 
-  # train the network with the dataset path of gi4e
-  # set the dataset path to the gi4e dataset
-  # dataset_path = './dataset/FasterRCNN/'
-  dataset_path = './datasets/GI4E/'
-  # gi4e path to the dataset
-  gi4e_dataset = ds.Gi4eDataset(dataset_path, transform=transform)
-  print('Train the network with the gi4e dataset')
-  print('run the main function with the dataset path with 10 folds and 10 epochs')
-  main(gi4e_dataset)
-  print('run the main function with the dataset path with 10 folds and 100 epochs')
-  main(gi4e_dataset, stop_after_one_fold=True)
+  # # train the network with the dataset path of gi4e
+  # # set the dataset path to the gi4e dataset
+  # # dataset_path = './dataset/FasterRCNN/'
+  # dataset_path = './datasets/GI4E/'
+  # # gi4e path to the dataset
+  # gi4e_dataset = ds.Gi4eDataset(dataset_path, transform=transform)
+  # print('Train the network with the gi4e dataset')
+  # print('run the main function with the dataset path with 10 folds and 10 epochs')
+  # main(gi4e_dataset)
+  # print('run the main function with the dataset path with 10 folds and 100 epochs')
+  # main(gi4e_dataset, stop_after_one_fold=True)
 
   # train the network with the dataset path of YouTubeFacesWithFacialKeypoints
   dataset_path = '.\datasets\YouTubeFacesWithFacialKeypoints'
   # YouTubeFacesWithFacialKeypoints path to the dataset
-  youtube_faces_dataset = ds.YoutubeFacesWithFacialKeypoints(
-      dataset_path, transform=transform)
+  youtube_faces_dataset = ds.YoutubeFacesWithFacialKeypoints(dataset_path, is_classification=False, transform=transform)
   print('Train the network with the youtube faces dataset')
   print('run the main function with the dataset path with 10 folds and 10 epochs')
   main(youtube_faces_dataset)
