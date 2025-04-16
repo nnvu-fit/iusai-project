@@ -342,17 +342,34 @@ class YoutubeFacesWithFacialKeypoints(Dataset):
     # check if the label files and data paths are the same
     self.data = []
 
-    annotations = []
-    label_file_count = len(label_files)
+    annotations = self.read_annotations(label_files)
+
+    # check if the labels and data paths are the same
+    self.labels = [annotation['label'] for annotation in annotations]
+    self.labels = list(set(self.labels))
+    self.labels.sort()
+    print('number of labels: ', len(self.labels))
+
+    aggregated_samples = {}
     if number_of_samples is not None:
-      label_file_count = min(label_file_count, number_of_samples)
-      label_files = label_files[:label_file_count]
-    # read the labels from the label files
-    for index, label_file in enumerate(label_files):
-      print(index+1, '/', label_file_count, '- label_file: ', label_file)
-      # read the labels from the label file
-      with open(label_file, 'r') as f:
-        annotations.extend(json.load(f))
+      # if number_of_samples is not None, each label will have the same number of samples
+      # check if the number of samples is less than the number of labels
+      for label in self.labels:
+        # get the number of samples for the label
+        samples = [annotation for annotation in annotations if annotation['label'] == label]
+        # check if the number of samples is less than the number of labels
+        if len(samples) < number_of_samples:
+          print('number of samples for label: ', label, 'is', len(samples), ', less than the number of samples: ', number_of_samples)
+          aggregated_samples[label] = samples
+        else:
+          # get the samples for the label
+          samples = random.sample(samples, number_of_samples)
+          aggregated_samples[label] = samples
+      # concatenate the samples for each label
+      annotations = []
+      for label in aggregated_samples:
+        annotations.extend(aggregated_samples[label])
+    
     # number of labels
     print('number of annotations: ', len(annotations))
     # ------------------------------------------------------------------------------------- #
@@ -362,18 +379,13 @@ class YoutubeFacesWithFacialKeypoints(Dataset):
     for index, annotation in enumerate(annotations):
       if index % 1000 == 0:
         print('annotation: ', index+1, '/', len(annotations), ' - ', annotation['image_id'], ' - ', annotation['label'])
-      self.read_annotation(annotation, data_paths)
+      self.find_data_path_for_annotation(annotation, data_paths)
     if len(annotations) % 1000 != 0:
       print('annotation: ', index+1, '/', len(annotations), ' - ', annotation['image_id'], ' - ', annotation['label'])
     # ------------------------------------------------------------------------------------- #
     print('-' * 50)
     # suffle data
     random.shuffle(self.data)
-    # check if the labels and data paths are the same
-    self.labels = [annotation['label'] for annotation in annotations]
-    self.labels = list(set(self.labels))
-    self.labels.sort()
-    print('number of labels: ', len(self.labels))
 
   def __len__(self):
     return len(self.data)
@@ -426,7 +438,19 @@ class YoutubeFacesWithFacialKeypoints(Dataset):
 
     return (image, target) if include_target else image
 
-  def read_annotation(self, annotation, data_paths):
+  def read_annotations(self, label_files):
+    annotations = []
+    label_file_count = len(label_files)
+    # read the labels from the label files
+    for index, label_file in enumerate(label_files):
+      print(index+1, '/', label_file_count, '- label_file: ', label_file)
+      # read the labels from the label file
+      with open(label_file, 'r') as f:
+        annotations.extend(json.load(f))
+    # return the annotations
+    return annotations
+
+  def find_data_path_for_annotation(self, annotation, data_paths):
     # get image_id, bounding_box, landmarks_2d, landmarks_3d from label
     image_id = annotation['image_id']
     bounding_box = annotation['bounding_box']
@@ -449,6 +473,4 @@ class YoutubeFacesWithFacialKeypoints(Dataset):
 
     # add the image path and target to the data
     self.data.append((image_path, target))
-
-  def labels(self):
-    return self.labels
+  

@@ -73,6 +73,8 @@ def evaluate(net, images, device=None):
 
 def main(dataset, is_show_sample_image=False, stop_after_one_fold=False):
   current_date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+  # save the report to the log file
+  log_file = './logs/faster_rcnn/' + current_date + '.log'
 
   # get device where the code will run
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -88,7 +90,7 @@ def main(dataset, is_show_sample_image=False, stop_after_one_fold=False):
   net = net.to(device)
   optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 
-  batch_size = 12
+  batch_size = 16
 
   if is_show_sample_image:
     # show first image
@@ -218,8 +220,6 @@ def main(dataset, is_show_sample_image=False, stop_after_one_fold=False):
       print('Fold ' + str(fold) + ', Epoch: ' + str(epoch) + ', Train loss: ' + str(train_loss) +
             ', Test average iou: ' + str(test_avg_iou) + ', Test average score: ' + str(test_avg_score))
 
-      # save the report to the log file
-      log_file = './logs/faster_rcnn/' + current_date + '.log'
       log_training_process_to_file(
           log_file, fold, epoch, train_loss, test_avg_iou, test_avg_score)
 
@@ -267,7 +267,11 @@ if __name__ == '__main__':
   # train the network with the dataset path of YouTubeFacesWithFacialKeypoints
   dataset_path = '.\datasets\YouTubeFacesWithFacialKeypoints'
   # YouTubeFacesWithFacialKeypoints path to the dataset
-  youtube_faces_dataset = ds.YoutubeFacesWithFacialKeypoints(dataset_path, is_classification=False, transform=transform)
+  youtube_faces_dataset = ds.YoutubeFacesWithFacialKeypoints(
+    dataset_path,
+    is_classification=False,
+    transform=transform,
+    number_of_samples=50)
   print('Train the network with the youtube faces dataset')
   print('run the main function with the dataset path with 10 folds and 10 epochs')
   main(youtube_faces_dataset)
