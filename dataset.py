@@ -136,9 +136,15 @@ class EyesDataset(Dataset):
 
 
 class Gi4eDataset(Dataset):
-  def __init__(self, data_path, transform=None):
+  def __init__(self, data_path, transform=None, is_classification=False):
+    """
+    Args:
+        data_path (string): Path to the dataset.
+        transform (callable, optional): Optional transform to be applied on a sample.
+    """
     self.offset = 28
     self.transform = transform
+    self.is_classification = is_classification
     self.labelsDir = os.path.join(data_path, 'labels')
     self.imagesDir = os.path.join(data_path, 'images')
     # load label files from labelsDir
@@ -149,8 +155,8 @@ class Gi4eDataset(Dataset):
         r'^\d+_image_labels.txt$', label)]
     # read the annotation from the label files
     self.data = []
-    for label in self.labelFiles:
-      self.read_annotations(label)
+    for label_file in self.labelFiles:
+      self.read_annotations(label_file)
     # shuffle data
     random.shuffle(self.data)
 
@@ -160,7 +166,12 @@ class Gi4eDataset(Dataset):
     if self.transform:
       image = self.transform(image)
 
-    return image, target
+    if self.is_classification:
+      # get the label from the target
+      label = target['user_number']
+      return image, label
+    else:
+      return image, target
 
   def __len__(self):
     return len(self.data)
@@ -175,9 +186,9 @@ class Gi4eDataset(Dataset):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     return image, target
 
-  def read_annotations(self, label):
+  def read_annotations(self, label_file):
     # get the label path from the labelsDir
-    label_path = os.path.join(self.labelsDir, label)
+    label_path = os.path.join(self.labelsDir, label_file)
     # read the annotations from the label file
     with open(label_path, 'r') as f:
       lines = f.readlines()
@@ -473,4 +484,27 @@ class YoutubeFacesWithFacialKeypoints(Dataset):
 
     # add the image path and target to the data
     self.data.append((image_path, target))
-  
+
+class CelebADataset(Dataset):
+  def __init__(self, data_path, transform=None):
+    self.data_path = data_path
+    self.transform = transform
+    # read the annotations from the label file
+    self.annotations = pd.read_csv(os.path.join(data_path, 'list_attr_celeba.csv'))
+    # get the image paths from the data path
+    self.image_paths = [os.path.join(data_path, 'img_align_celeba', image) for image in os.listdir(os.path.join(data_path, 'img_align_celeba')) if image.endswith('.jpg')]
+    # shuffle the data
+    random.shuffle(self.image_paths)
+
+  def __len__(self):
+    return len(self.image_paths)
+
+  def __getitem__(self, index):
+    # get the image path from the data path
+    image_path = self.image_paths[index]
+    # read the image from the image path
+    image = Image.open(image_path)
+    # get the label from the annotations
+    label = self.annotations[self.annotations['image_id'] == os.path.basename(image_path)].iloc[0]
+    # convert the label to a tensor
+    label = torch.tensor(label[1:].values, dtype=torch.float32)

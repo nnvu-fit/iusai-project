@@ -42,7 +42,7 @@ class ClassifierTrainer:
     if random_seed_value is not None:
       seed_everything(random_seed_value)
 
-  def cross_validate(self, dataset, k=5, epochs=1):
+  def cross_validate(self, train_dataset, k=5, epochs=1):
     """
     Performs k-fold cross-validation on a PyTorch model using the specified optimizer and loss function.
 
@@ -59,14 +59,14 @@ class ClassifierTrainer:
       float: The average loss on the given dataset across all folds.
     """
     self.model.to(self.device)
-    fold_size = len(dataset) // k
+    fold_size = len(train_dataset) // k
     total_loss = 0.0
     report_metric = []
     for fold in range(k):
       self.current_fold = fold
       print(f'Fold {fold+1}/{k}:')
-      train_data = torch.utils.data.Subset(dataset, list(range(fold_size * fold)) + list(range(fold_size * (fold + 1), len(dataset))))
-      test_data = torch.utils.data.Subset(dataset, range(fold_size * fold, fold_size * (fold + 1)))
+      train_data = torch.utils.data.Subset(train_dataset, list(range(fold_size * fold)) + list(range(fold_size * (fold + 1), len(train_dataset))))
+      test_data = torch.utils.data.Subset(train_dataset, range(fold_size * fold, fold_size * (fold + 1)))
       train_loader = torch.utils.data.DataLoader(train_data, batch_size=32, shuffle=True)
       test_loader = torch.utils.data.DataLoader(test_data, batch_size=32, shuffle=False)
       
