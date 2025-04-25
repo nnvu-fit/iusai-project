@@ -20,7 +20,7 @@ import dataset as ds # type: ignore
 
 def doTheTrain(dataset, model):
     # define batch_size
-    batch_size = 32
+    batch_size = 128
 
     # init train val test ds
     train_val_size = int(0.9 * len(dataset))
@@ -33,7 +33,7 @@ def doTheTrain(dataset, model):
 
     trainer = Trainer(model, optimizer, loss_fn, random_seed_value=86)
     print('device: ', trainer.device)
-    avg_lost = trainer.cross_validate(train_ds, epochs=5)
+    avg_lost = trainer.cross_validate(train_ds, k=10, epochs=10, batch_size=batch_size)
     print('avg_lost: ', avg_lost)
 
     # score model
@@ -43,19 +43,27 @@ def doTheTrain(dataset, model):
 
 
 if __name__ == "__main__":
-
     model = torchvision.models.resnet50(weights=ResNet50_Weights.DEFAULT)
-    # init transform for dataset
-    transform = transforms.Compose(
-        [transforms.Resize((224, 224)), transforms.ToTensor()])
+    
+    # create dataset for Gi4e
+    images_path = './datasets/gi4e'
+    transform = transforms.Compose([transforms.ToPILImage(),transforms.Resize((224, 224)),transforms.ToTensor()])
+    dataset = ds.Gi4eDataset(images_path, transform=transform, is_classification=True)
+    first_image, first_label = dataset[0]
+    print('first_image: ', first_image.shape)
+    print('first_label: ', first_label)
+    print('dataset len: ', len(dataset))
+    # train the model
+    doTheTrain(dataset, model)
 
     # create dataset for Gi4eEyes
-    images_path = './datasets/gi4e_eyes'
+    transform = transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor()])
+    images_path = './datasets/gi4e_eyes/20250412_185051'
     dataset = ds.Gi4eEyesDataset(images_path, transform=transform)
     first_image, first_label = dataset[0]
     print('first_image: ', first_image.shape)
+    print('first_label: ', first_label)
     print('dataset len: ', len(dataset))
-
     doTheTrain(dataset, model)
 
     # # create dataset for YouTubeFacesWithFacialKeypoints

@@ -232,7 +232,7 @@ class Gi4eDataset(Dataset):
       # get user number from the image name
       user_number = int(re.search(r'\d+', image_name).group())
       # add the user number to the target
-      target['user_number'] = torch.tensor([user_number])
+      target['user_number'] = torch.tensor(user_number)
 
       # push the image and the target to the data
       self.data.append((image_name, target))
