@@ -16,8 +16,8 @@ import os
 
 class ImageDataset(Dataset):
   # Initialize your data from data_path using glob
-  def __init__(self, data_path, transform=None):
-    self.data = glob.glob(data_path + '/*/*.jpg')
+  def __init__(self, data_path, file_extension='jpg', transform=None):
+    self.data = glob.glob(data_path + '/*/*.' + file_extension, recursive=True)
     # suffle data
     random.shuffle(self.data)
     self.transform = transform
@@ -370,7 +370,8 @@ class YoutubeFacesWithFacialKeypoints(Dataset):
         samples = [annotation for annotation in annotations if annotation['label'] == label]
         # check if the number of samples is less than the number of labels
         if len(samples) < number_of_samples:
-          print('number of samples for label: ', label, 'is', len(samples), ', less than the number of samples: ', number_of_samples)
+          print('number of samples for label: ', label, 'is', len(samples),
+                ', less than the number of samples: ', number_of_samples)
           aggregated_samples[label] = samples
         else:
           # get the samples for the label
@@ -380,7 +381,7 @@ class YoutubeFacesWithFacialKeypoints(Dataset):
       annotations = []
       for label in aggregated_samples:
         annotations.extend(aggregated_samples[label])
-    
+
     # number of labels
     print('number of annotations: ', len(annotations))
     # ------------------------------------------------------------------------------------- #
@@ -409,8 +410,8 @@ class YoutubeFacesWithFacialKeypoints(Dataset):
       image = self.transform(image)
 
     # get left_eye_points, right_eye_points from landmarks_2d
-    left_eye_points = target['landmarks_2d'][YoutubeFacesWithFacialKeypoints.leftEyePoints[0]:YoutubeFacesWithFacialKeypoints.leftEyePoints[1]]
-    right_eye_points = target['landmarks_2d'][YoutubeFacesWithFacialKeypoints.rightEyePoints[0]:YoutubeFacesWithFacialKeypoints.rightEyePoints[1]]
+    left_eye_points = target['landmarks_2d'][YoutubeFacesWithFacialKeypoints.leftEyePoints[0]                                             :YoutubeFacesWithFacialKeypoints.leftEyePoints[1]]
+    right_eye_points = target['landmarks_2d'][YoutubeFacesWithFacialKeypoints.rightEyePoints[0]                                              :YoutubeFacesWithFacialKeypoints.rightEyePoints[1]]
     # from the eye points, it's geometric center of the eye
     left_eye_center = np.mean(left_eye_points, axis=0)
     right_eye_center = np.mean(right_eye_points, axis=0)
@@ -485,6 +486,7 @@ class YoutubeFacesWithFacialKeypoints(Dataset):
     # add the image path and target to the data
     self.data.append((image_path, target))
 
+
 class CelebADataset(Dataset):
   def __init__(self, data_path, transform=None):
     self.data_path = data_path
@@ -492,7 +494,8 @@ class CelebADataset(Dataset):
     # read the annotations from the label file
     self.annotations = pd.read_csv(os.path.join(data_path, 'list_attr_celeba.csv'))
     # get the image paths from the data path
-    self.image_paths = [os.path.join(data_path, 'img_align_celeba', image) for image in os.listdir(os.path.join(data_path, 'img_align_celeba')) if image.endswith('.jpg')]
+    self.image_paths = [os.path.join(data_path, 'img_align_celeba', image) for image in os.listdir(
+        os.path.join(data_path, 'img_align_celeba')) if image.endswith('.jpg')]
     # shuffle the data
     random.shuffle(self.image_paths)
 

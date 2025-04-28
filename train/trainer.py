@@ -72,7 +72,8 @@ class ClassifierTrainer:
       
       lost_metric = self.train(train_loader, test_loader, epochs)
       report_metric.append(lost_metric)
-      total_loss += self.score(test_loader)
+      fold_loss = self.score(test_loader)
+      total_loss += fold_loss
 
       y_true = []
       y_pred = []
@@ -87,7 +88,7 @@ class ClassifierTrainer:
       confusion = confusion_matrix(y_true, y_pred)
       self.save_report(report, confusion)
 
-      print(f'Fold {fold+1}/{k}, Test Loss: {total_loss:.4f}')
+      print(f'Fold {fold+1}/{k}, Total Test Loss: {total_loss:.4f}, Fold accuracy: {100*(1 - fold_loss):.4f}')
     return [total_loss / k, report_metric]
 
 

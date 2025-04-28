@@ -39,7 +39,7 @@ def doTheTrain(dataset, model):
     # score model
     test_dataloader = DataLoader(test_ds, batch_size=batch_size, shuffle=True)
     model_scored = trainer.score(test_dataloader)
-    print('model_scored: ', model_scored)
+    print(f'model_scored: {model_scored:.4f}, avg_accuracy: {100*(1 - model_scored):.4f}')
 
 
 if __name__ == "__main__":
@@ -59,7 +59,8 @@ if __name__ == "__main__":
     # create dataset for Gi4eEyes
     transform = transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor()])
     images_path = './datasets/gi4e_eyes/20250412_185051'
-    dataset = ds.Gi4eEyesDataset(images_path, transform=transform)
+    dataset = ds.ImageDataset(images_path, transform=transform, file_extension='png')
+    print('dataset labels: ', dataset.labels())
     first_image, first_label = dataset[0]
     print('first_image: ', first_image.shape)
     print('first_label: ', first_label)
