@@ -23,7 +23,7 @@ def doTheTrain(dataset, model):
     batch_size = 128
 
     # init train val test ds
-    train_val_size = int(0.9 * len(dataset))
+    train_val_size = int(0.8 * len(dataset))
     test_size = len(dataset) - train_val_size
     train_ds, test_ds = random_split(dataset, [train_val_size, test_size])
 
