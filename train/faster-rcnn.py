@@ -90,7 +90,7 @@ def main(dataset, is_show_sample_image=False, stop_after_one_fold=False):
   net = net.to(device)
   optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 
-  batch_size = 16
+  batch_size = 8
 
   if is_show_sample_image:
     # show first image
@@ -252,28 +252,28 @@ if __name__ == '__main__':
           torchvision.transforms.ToTensor()
       ])
 
-  # # train the network with the dataset path of gi4e
-  # # set the dataset path to the gi4e dataset
-  # # dataset_path = './dataset/FasterRCNN/'
-  # dataset_path = './datasets/GI4E/'
-  # # gi4e path to the dataset
-  # gi4e_dataset = ds.Gi4eDataset(dataset_path, transform=transform)
-  # print('Train the network with the gi4e dataset')
-  # print('run the main function with the dataset path with 10 folds and 10 epochs')
-  # main(gi4e_dataset)
+  # train the network with the dataset path of gi4e
+  # set the dataset path to the gi4e dataset
+  # dataset_path = './dataset/FasterRCNN/'
+  dataset_path = './datasets/GI4E/'
+  # gi4e path to the dataset
+  gi4e_dataset = ds.Gi4eDataset(dataset_path, transform=transform)
+  print('Train the network with the gi4e dataset')
+  print('run the main function with the dataset path with 10 folds and 10 epochs')
+  main(gi4e_dataset)
   # print('run the main function with the dataset path with 10 folds and 100 epochs')
   # main(gi4e_dataset, stop_after_one_fold=True)
 
-  # train the network with the dataset path of YouTubeFacesWithFacialKeypoints
-  dataset_path = '.\datasets\YouTubeFacesWithFacialKeypoints'
-  # YouTubeFacesWithFacialKeypoints path to the dataset
-  youtube_faces_dataset = ds.YoutubeFacesWithFacialKeypoints(
-    dataset_path,
-    is_classification=False,
-    transform=transform,
-    number_of_samples=50)
-  print('Train the network with the youtube faces dataset')
-  print('run the main function with the dataset path with 10 folds and 10 epochs')
-  main(youtube_faces_dataset)
-  print('run the main function with the dataset path with 10 folds and 100 epochs')
-  main(youtube_faces_dataset, stop_after_one_fold=True)
+  # # train the network with the dataset path of YouTubeFacesWithFacialKeypoints
+  # dataset_path = '.\datasets\YouTubeFacesWithFacialKeypoints'
+  # # YouTubeFacesWithFacialKeypoints path to the dataset
+  # youtube_faces_dataset = ds.YoutubeFacesWithFacialKeypoints(
+  #   dataset_path,
+  #   is_classification=False,
+  #   transform=transform,
+  #   number_of_samples=50)
+  # print('Train the network with the youtube faces dataset')
+  # print('run the main function with the dataset path with 10 folds and 10 epochs')
+  # main(youtube_faces_dataset)
+  # print('run the main function with the dataset path with 10 folds and 100 epochs')
+  # main(youtube_faces_dataset, stop_after_one_fold=True)

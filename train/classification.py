@@ -20,7 +20,7 @@ import dataset as ds # type: ignore
 
 def doTheTrain(dataset, model):
     # define batch_size
-    batch_size = 128
+    batch_size = 32
 
     # init train val test ds
     train_val_size = int(0.8 * len(dataset))
@@ -44,36 +44,21 @@ def doTheTrain(dataset, model):
 
 if __name__ == "__main__":
     model = torchvision.models.resnet50(weights=ResNet50_Weights.DEFAULT)
+
+    datasets = {
+      # ds.Gi4eDataset(
+      #   './datasets/gi4e',
+      #   transform=transforms.Compose([transforms.ToPILImage(),transforms.Resize((224, 224)),transforms.ToTensor()]),
+      #   is_classification=True),
+      'gi4e_raw_eyes': ds.ImageDataset(
+        './datasets/gi4e_raw_eyes',
+        transform=transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor()]),
+        file_extension='png')
+    }
     
-    # create dataset for Gi4e
-    images_path = './datasets/gi4e'
-    transform = transforms.Compose([transforms.ToPILImage(),transforms.Resize((224, 224)),transforms.ToTensor()])
-    dataset = ds.Gi4eDataset(images_path, transform=transform, is_classification=True)
-    first_image, first_label = dataset[0]
-    print('first_image: ', first_image.shape)
-    print('first_label: ', first_label)
-    print('dataset len: ', len(dataset))
-    # train the model
-    doTheTrain(dataset, model)
-
-    # create dataset for Gi4eEyes
-    transform = transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor()])
-    images_path = './datasets/gi4e_eyes/20250412_185051'
-    dataset = ds.ImageDataset(images_path, transform=transform, file_extension='png')
-    print('dataset labels: ', dataset.labels())
-    first_image, first_label = dataset[0]
-    print('first_image: ', first_image.shape)
-    print('first_label: ', first_label)
-    print('dataset len: ', len(dataset))
-    doTheTrain(dataset, model)
-
-    # # create dataset for YouTubeFacesWithFacialKeypoints
-    # images_path = './datasets/YouTubeFacesWithFacialKeypoints'
-    # dataset = ds.YoutubeFacesWithFacialKeypoints(
-    #     images_path, transform=transform)
-
-    # first_image, first_label = dataset[0]
-    # print('first_image: ', first_image.shape)
-    # print('dataset len: ', len(dataset))
-
-    # doTheTrain(dataset, model)
+    for name, dataset in datasets.items():
+        print(f'Running {name} dataset')
+        # do the train
+        doTheTrain(dataset, model)
+        print(f'Finished {name} dataset')
+        print('----------------------------------')

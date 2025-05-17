@@ -142,7 +142,7 @@ class Gi4eDataset(Dataset):
         data_path (string): Path to the dataset.
         transform (callable, optional): Optional transform to be applied on a sample.
     """
-    self.offset = 28
+    self.offset = 32
     self.transform = transform
     self.is_classification = is_classification
     self.labelsDir = os.path.join(data_path, 'labels')
