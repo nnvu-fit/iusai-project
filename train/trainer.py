@@ -89,6 +89,10 @@ class ClassifierTrainer:
       self.save_report(report, confusion)
 
       print(f'Fold {fold+1}/{k}, Total Test Loss: {total_loss:.4f}, Fold accuracy: {100*(1 - fold_loss):.4f}')
+
+      # save model by model
+      torch.save(self.model.state_dict(), f"{self.model.__class__.__name__}\\{self.timestamp}\\fold_{fold}.pth")
+
     return [total_loss / k, report_metric]
 
 

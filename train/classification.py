@@ -46,16 +46,16 @@ if __name__ == "__main__":
   model = torchvision.models.resnet50(weights=ResNet50_Weights.DEFAULT)
 
   datasets = {
-    # ds.Gi4eDataset(
-    #   './datasets/gi4e',
-    #   transform=transforms.Compose([transforms.ToPILImage(),transforms.Resize((224, 224)),transforms.ToTensor()]),
-    #   is_classification=True),
+    'gi4e_full': ds.Gi4eDataset(
+        './datasets/gi4e',
+        transform=transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor()]),
+        is_classification=True),
     'gi4e_raw_eyes': ds.ImageDataset(
       './datasets/gi4e_raw_eyes',
       transform=transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor()]),
       file_extension='png'),
     'gi4e_detected_eyes': ds.ImageDataset(
-      './datasets/gi4e_eyes/20250521_180915',
+      './datasets/gi4e_eyes/20250521_200316',
       transform=transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor()]),
       file_extension='png'),
   }
