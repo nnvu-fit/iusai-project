@@ -74,7 +74,7 @@ def main(input_path, output_path):
 
 
 if __name__ == "__main__":
-  input_path = 'C:\\Users\\nnvuf\\source\\ai-final-project\\datasets\\GI4E'
-  output_path = 'C:\\Users\\nnvuf\\source\\ai-final-project\\datasets\\gi4e_raw_eyes'
+  input_path = 'D:\\Workspace\\thesis_sources\\datasets\\gi4e'
+  output_path = 'D:\\Workspace\\thesis_sources\\datasets\\gi4egi4e_raw_eyes'
   # Call the main function with the parsed arguments
   main(input_path, output_path)

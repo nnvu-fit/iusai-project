@@ -50,10 +50,10 @@ if __name__ == "__main__":
     #   './datasets/gi4e',
     #   transform=transforms.Compose([transforms.ToPILImage(),transforms.Resize((224, 224)),transforms.ToTensor()]),
     #   is_classification=True),
-    # 'gi4e_raw_eyes': ds.ImageDataset(
-    #   './datasets/gi4e_raw_eyes',
-    #   transform=transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor()]),
-    #   file_extension='png'),
+    'gi4e_raw_eyes': ds.ImageDataset(
+      './datasets/gi4e_raw_eyes',
+      transform=transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor()]),
+      file_extension='png'),
     'gi4e_detected_eyes': ds.ImageDataset(
       './datasets/gi4e_eyes/20250521_180915',
       transform=transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor()]),
@@ -66,3 +66,4 @@ if __name__ == "__main__":
       doTheTrain(dataset, model)
       print(f'Finished {name} dataset')
       print('----------------------------------')
+

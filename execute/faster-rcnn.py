@@ -74,7 +74,7 @@ def main(image_path, weights_path, eyes_dataset_path, is_log_enabled=False):
       max_boxes = {}
       for box_index, box in enumerate(boxes):
         box_score = scores[box_index]
-        if box_score < 0.5:
+        if box_score < 0.8:
           continue
         label = labels[box_index]
         if label not in max_scores.keys():
