@@ -29,7 +29,7 @@ def main(image_path, weights_path, eyes_dataset_path, is_log_enabled=False):
       ])
 
   # get all the images paths
-  images_path = glob.glob(image_path + '**/*.jpg', recursive=True)
+  images_path = glob.glob(image_path + '**/*.png', recursive=True)
   log('length of images_path: ', len(images_path),
       '- length of test images: ', len([x for x in images_path if 'test' in x]),
       '- length of train images: ', len([x for x in images_path if 'train' in x]))
@@ -50,6 +50,10 @@ def main(image_path, weights_path, eyes_dataset_path, is_log_enabled=False):
   # extract eyes from the images and labels
   with torch.no_grad():
     for index, image_path in enumerate(images_path):
+      image_id = os.path.basename(image_path)
+      image_id = os.path.splitext(image_id)[0]
+      person_id = int(image_id.split('_')[0]).__str__()
+
       image = cv2.imread(image_path)
       image = transform(image).unsqueeze(0).to(device)
 
@@ -57,11 +61,13 @@ def main(image_path, weights_path, eyes_dataset_path, is_log_enabled=False):
         log('Processing image: ', index, ' of ', len(images_path))
 
       outputs = net(image)
-      log('outputs: ', outputs)
 
       boxes = outputs[0]['boxes'].cpu().numpy()
       labels = outputs[0]['labels'].cpu().numpy()
       scores = outputs[0]['scores'].cpu().numpy()
+      
+      # read the image
+      image = cv2.imread(image_path)
 
       # get maximum score and box for each label
       max_scores = {}
@@ -79,26 +85,31 @@ def main(image_path, weights_path, eyes_dataset_path, is_log_enabled=False):
             max_scores[label] = box_score
             max_boxes[label] = box
 
-      image = cv2.imread(image_path)
-      # show the image with the boxes and labels and scores
-      for box_index, box in enumerate(boxes):
-        image = cv2.rectangle(image,
-            (int(box[0]), int(box[1])), (int(box[2]), int(box[3])),
-            (0, 255, 0), 2)
-        box_score = scores[box_index]
-        if box_score < 0.5:
-          continue
-        label = labels[box_index]
-        label_str = 'left' if label == 1 else 'right'
-        cv2.putText(image, label_str + ' ' + str(box_score),
-            (int(box[0]), int(box[1] - 10)), cv2.FONT_HERSHEY_SIMPLEX,
-            0.5, (0, 255, 0), 2)
-      cv2.imshow('image', image)
-      cv2.waitKey(0)
-      cv2.destroyAllWindows()
-        
-
-      return
+        # crop the eye from the image
+        eye = image[int(box[1]):int(box[3]), int(box[0]):int(box[2])]
+        # save the eye image to the file
+        eye_path = os.path.join(eyes_dataset_path, person_id)
+        if not os.path.exists(eye_path):
+          os.makedirs(eye_path)
+        eye_path = os.path.join(
+            eye_path, image_id + '_' + str(box_index) + '.png')
+        while (os.path.exists(eye_path)):
+          eye_path = eye_path.replace('.png', '_1.png')
+        try:
+          if eye.shape[0] == 0 or eye.shape[1] == 0:
+            log('eye shape: ', eye.shape)
+            continue
+          success = cv2.imwrite(eye_path, eye)
+          if not success:
+            print('Error saving the image: ', eye_path)
+            print('eye: ', eye)
+        except Exception as e:
+          print('Error saving the image: ', eye_path)
+          print('eye: ', eye)
+          print('Exception: ', e)
+          cv2.imshow('eye', eye)
+          cv2.waitKey(0)
+          cv2.destroyAllWindows()
 
     # for (images, targets) in dataloader:
     #   images = images.to(device)
@@ -157,7 +168,7 @@ def main(image_path, weights_path, eyes_dataset_path, is_log_enabled=False):
     #         cv2.waitKey(0)
     #         cv2.destroyAllWindows()
 if __name__ == "__main__":
-  image_path = './datasets/CelebA_HQ_facial_identity_dataset/'
-  eyes_dataset_path = './datasets/CelebA_HQ_facial_identity_eyes/test/'
-  weights_path = './models/faster-rcnn.pth'
+  image_path = './datasets/gi4e/'
+  eyes_dataset_path = './datasets/gi4e_eyes/'
+  weights_path = './models/faster_rcnn/20250520_002830/fold_8_epoch_6.pth'
   main(image_path, weights_path, eyes_dataset_path, is_log_enabled=True)

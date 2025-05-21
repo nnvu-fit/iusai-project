@@ -20,7 +20,7 @@ import dataset as ds # type: ignore
 
 def doTheTrain(dataset, model):
     # define batch_size
-    batch_size = 32
+    batch_size = 64
 
     # init train val test ds
     train_val_size = int(0.8 * len(dataset))
@@ -43,22 +43,26 @@ def doTheTrain(dataset, model):
 
 
 if __name__ == "__main__":
-    model = torchvision.models.resnet50(weights=ResNet50_Weights.DEFAULT)
+  model = torchvision.models.resnet50(weights=ResNet50_Weights.DEFAULT)
 
-    datasets = {
-      # ds.Gi4eDataset(
-      #   './datasets/gi4e',
-      #   transform=transforms.Compose([transforms.ToPILImage(),transforms.Resize((224, 224)),transforms.ToTensor()]),
-      #   is_classification=True),
-      'gi4e_raw_eyes': ds.ImageDataset(
-        './datasets/gi4e_raw_eyes',
-        transform=transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor()]),
-        file_extension='png')
-    }
-    
-    for name, dataset in datasets.items():
-        print(f'Running {name} dataset')
-        # do the train
-        doTheTrain(dataset, model)
-        print(f'Finished {name} dataset')
-        print('----------------------------------')
+  datasets = {
+    # ds.Gi4eDataset(
+    #   './datasets/gi4e',
+    #   transform=transforms.Compose([transforms.ToPILImage(),transforms.Resize((224, 224)),transforms.ToTensor()]),
+    #   is_classification=True),
+    # 'gi4e_raw_eyes': ds.ImageDataset(
+    #   './datasets/gi4e_raw_eyes',
+    #   transform=transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor()]),
+    #   file_extension='png'),
+    'gi4e_detected_eyes': ds.ImageDataset(
+      './datasets/gi4e_eyes/20250521_180915',
+      transform=transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor()]),
+      file_extension='png'),
+  }
+  
+  for name, dataset in datasets.items():
+      print(f'Running {name} dataset')
+      # do the train
+      doTheTrain(dataset, model)
+      print(f'Finished {name} dataset')
+      print('----------------------------------')

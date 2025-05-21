@@ -90,7 +90,7 @@ def main(dataset, is_show_sample_image=False, stop_after_one_fold=False):
   net = net.to(device)
   optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 
-  batch_size = 8
+  batch_size = 16
 
   if is_show_sample_image:
     # show first image
@@ -115,7 +115,7 @@ def main(dataset, is_show_sample_image=False, stop_after_one_fold=False):
   kfold = KFold(n_splits=k_folds, shuffle=True)
 
   for fold, (train_ids, test_ids) in enumerate(kfold.split(dataset)):
-    print('Fold: ', fold)
+    print('Fold: ', fold, '/', str(k_folds))
     print('train_ids: ', train_ids)
     print('test_ids: ', test_ids)
 
@@ -215,8 +215,13 @@ def main(dataset, is_show_sample_image=False, stop_after_one_fold=False):
               test_total_iou += iou.item()
               test_total_score += box_score
 
-      test_avg_iou = test_total_iou / count
-      test_avg_score = test_total_score / count
+      # calculate the average IoU and score for the test data
+      if count == 0:
+        test_avg_iou = 0.0
+        test_avg_score = 0.0
+      else:
+        test_avg_iou = test_total_iou / count
+        test_avg_score = test_total_score / count
       print('Fold ' + str(fold) + ', Epoch: ' + str(epoch) + ', Train loss: ' + str(train_loss) +
             ', Test average iou: ' + str(test_avg_iou) + ', Test average score: ' + str(test_avg_score))
 
@@ -248,7 +253,6 @@ if __name__ == '__main__':
   transform = torchvision.transforms.Compose(
       [
           torchvision.transforms.ToPILImage(),
-          torchvision.transforms.Resize((224, 224)),
           torchvision.transforms.ToTensor()
       ])
 
