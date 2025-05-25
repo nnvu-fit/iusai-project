@@ -37,7 +37,7 @@ class ClassifierTrainer:
     # set runing timestamp for the model to save the result
     # in the folder with the timestamp name
     # timestamp must be taken by current time
-    self.timestamp = time.strftime("%Y%m%d-%H%M%S")
+    self.timestamp = time.strftime("%Y%m%d_%H%M%S")
 
     if random_seed_value is not None:
       seed_everything(random_seed_value)
@@ -91,7 +91,10 @@ class ClassifierTrainer:
       print(f'Fold {fold+1}/{k}, Total Test Loss: {total_loss:.4f}, Fold accuracy: {100*(1 - fold_loss):.4f}')
 
       # save model by model
-      torch.save(self.model.state_dict(), f"{self.model.__class__.__name__}\\{self.timestamp}\\fold_{fold}.pth")
+      model_path_dir = f".\\models\\{self.model.__class__.__name__}\\{self.timestamp}"
+      if not os.path.exists(model_path_dir):
+        os.makedirs(model_path_dir)
+      torch.save(self.model.state_dict(), f"{model_path_dir}\\fold_{fold}.pth")
 
     return [total_loss / k, report_metric]
 

@@ -48,7 +48,7 @@ if __name__ == "__main__":
   datasets = {
     'gi4e_full': ds.Gi4eDataset(
         './datasets/gi4e',
-        transform=transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor()]),
+        transform=transforms.Compose([transforms.ToPILImage(), transforms.Resize((224, 224)), transforms.ToTensor()]),
         is_classification=True),
     'gi4e_raw_eyes': ds.ImageDataset(
       './datasets/gi4e_raw_eyes',
