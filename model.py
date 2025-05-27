@@ -2,72 +2,59 @@ from typing import TypeVar
 import torch
 import torch.nn as nn
 from torchvision import models
+from typing import Generic
+import torch
 
-# define generic linear classifier
-TClass = TypeVar('TClass', bound=nn.Module)
+import torch.nn as nn
 
+T = TypeVar('T', bound=nn.Module)
 
-class EmbededClassifier(TClass):
-  # Base class for classifiers that embed features.
-  def __init__(self, **kwargs):
-    """
-    Initialize the classifier with the given parameters.
-    Args:
-        kwargs (dict): Dictionary containing the parameters for the classifier.
-            Expected keys: 'in_features' (int), 'num_classes' (int).
-    """
-    super(EmbededClassifier, self).__init__(kwargs)
-    self.fc_temp = super.fc
-    # check if super().fc is defined
-    if not hasattr(super(), 'fc'):
-      raise NotImplementedError("The base class must implement the 'fc' method.")
-
-    # assign fc to a temporary variable
-    self.fc_temp = super.fc
-
-  # define fc function to do nothing
-  def fc(self, x: torch.Tensor) -> torch.Tensor:
-    """    Dummy function to be overridden in subclasses.
-    Args:
-        x (torch.Tensor): Input tensor.
-    Returns:
-        torch.Tensor: Output tensor.
-    """
-    return x
-
+class FeatureExtractor(nn.Module, Generic[T]):
+  """Base model that extracts features without classification layer"""
+  
+  def __init__(self, backbone: T = None, pretrained: bool = True):
+    super().__init__()
+    
+    if backbone is None:
+      # Default to ResNet50 if no backbone provided
+      backbone = models.resnet50(weights=torchvision.models.ResNet50_Weights.DEFAULT if pretrained else None)
+      if pretrained:
+        print("Using pretrained ResNet50 backbone")
+    
+    # Find and store the feature dimension and remove classification layer
+    if hasattr(backbone, 'fc'):
+      # ResNet, DenseNet style
+      self.feature_dim = backbone.fc.in_features
+      backbone.fc = nn.Identity()
+    elif hasattr(backbone, 'classifier'):
+      # VGG, EfficientNet style
+      if isinstance(backbone.classifier, nn.Sequential):
+        self.feature_dim = backbone.classifier[0].in_features
+        backbone.classifier = nn.Identity()
+      else:
+        self.feature_dim = backbone.classifier.in_features
+        backbone.classifier = nn.Identity()
+    else:
+      raise ValueError("Unsupported backbone: cannot locate classification layer")
+      
+    self.backbone = backbone
+    
   def forward(self, x: torch.Tensor) -> torch.Tensor:
-    """
-    Forward pass through the classifier.
-    Args:
-        x (torch.Tensor): Input tensor of shape (batch_size, in_features).
-    Returns:
-        torch.Tensor: Output tensor of shape (batch_size, num_classes).
-    """
-    x = self.forward(x)
-    return self.fc(x)
+    """Extract features from input"""
+    features = self.backbone(x)
+    return features
 
 
-class LinearClassifier(EmbededClassifier):
-  def __init__(self, **kwargs):
-    """
-    Initialize the linear classifier with the given parameters.
-    Args:
-        kwargs (dict): Dictionary containing the parameters for the classifier.
-            Expected keys: 'in_features' (int), 'num_classes' (int).
-    """
-    super(LinearClassifier, self).__init__(kwargs)
-
-    self.fc = self.fc_temp
-
+class Classifier(FeatureExtractor[T]):
+  """Model with classification layer on top of feature extractor"""
+  
+  def __init__(self, num_classes: int, backbone: T = None, pretrained: bool = True):
+    super().__init__(backbone=backbone, pretrained=pretrained)
+    
+    # Add the classification layer
+    self.classifier = nn.Linear(self.feature_dim, num_classes)
+    
   def forward(self, x: torch.Tensor) -> torch.Tensor:
-    """
-    Forward pass through the linear classifier.
-    Args:
-        x (torch.Tensor): Input tensor of shape (batch_size, in_features).
-    Returns:
-        torch.Tensor: Output tensor of shape (batch_size, num_classes).
-    """
-    super().forward(x)
-    if not hasattr(self, 'fc'):
-      raise NotImplementedError("The 'fc' method must be implemented in the subclass.")
-    return self.fc(x)
+    features = super().forward(x)
+    output = self.classifier(features)
+    return output
