@@ -53,9 +53,15 @@ class Classifier(FeatureExtractor[T]):
     
     # Add the classification layer
     self.classifier = nn.Linear(self.feature_dim, num_classes)
+
+    # rename the class name to Classifier and backbone name
+    self.__class__.__name__ = 'Classifier' + f'_{self.backbone.__class__.__name__}'
     
   def forward(self, x: torch.Tensor) -> torch.Tensor:
     features = super().forward(x)
+    # TODO: Add dropout or other layers if needed
+
+    
     output = self.classifier(features)
     return output
 
