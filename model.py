@@ -58,3 +58,16 @@ class Classifier(FeatureExtractor[T]):
     features = super().forward(x)
     output = self.classifier(features)
     return output
+
+
+def embedded_resnet50(num_classes: int, pretrained: bool = True) -> Classifier:
+    """Convenience function to create a ResNet50 classifier"""
+    return Classifier(num_classes=num_classes, backbone=models.resnet50(pretrained=pretrained), pretrained=pretrained)
+
+def embedded_vgg16(num_classes: int, pretrained: bool = True) -> Classifier:
+    """Convenience function to create a VGG16 classifier"""
+    return Classifier(num_classes=num_classes, backbone=models.vgg16(pretrained=pretrained), pretrained=pretrained)
+
+def embedded_densenet121(num_classes: int, pretrained: bool = True) -> Classifier:
+    """Convenience function to create a DenseNet121 classifier"""
+    return Classifier(num_classes=num_classes, backbone=models.densenet121(pretrained=pretrained), pretrained=pretrained)
