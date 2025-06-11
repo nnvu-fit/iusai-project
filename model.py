@@ -19,6 +19,8 @@ class FeatureExtractor(nn.Module):
     else:
       self.features = nn.Sequential(*list(backbone.children()))
 
+    self.__class__.__name__ = f"FeatureExtractor({backbone.__class__.__name__})"
+
   def forward(self, x: torch.Tensor) -> torch.Tensor:
     x = self.features(x)
     x = x.view(x.size(0), -1)  # Flatten the output
@@ -33,6 +35,8 @@ class Classifier(nn.Module):
       self.fc = backbone[-1]
     else:
       self.fc = backbone.fc if hasattr(backbone, 'fc') else backbone.classifier
+
+    self.__class__.__name__ = f"Classifier({backbone.__class__.__name__})"
 
   def forward(self, x: torch.Tensor) -> torch.Tensor:
     return self.fc(x)

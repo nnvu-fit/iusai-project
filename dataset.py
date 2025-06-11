@@ -511,3 +511,38 @@ class CelebADataset(Dataset):
     label = self.annotations[self.annotations['image_id'] == os.path.basename(image_path)].iloc[0]
     # convert the label to a tensor
     label = torch.tensor(label[1:].values, dtype=torch.float32)
+
+
+class EmbeddedDataset(Dataset):
+  def __init__(self, dataset, model):
+    """
+    Args:
+        dataset (Dataset): The dataset to be embedded.
+        model (nn.Module): The model to be used for embedding.
+    """
+    self.dataset = dataset
+    self.model = model
+    self.embeddings = []
+    
+    # Precompute embeddings for the entire dataset
+    self.compute_embeddings()
+
+  def compute_embeddings(self):
+    self.model.eval()
+    with torch.no_grad():
+      for i in range(len(self.dataset)):
+        image, _ = self.dataset[i]
+        image = image.unsqueeze(0)  # Add batch dimension
+        embedding = self.model(image)
+        self.embeddings.append(embedding.squeeze(0))  # Remove batch dimension
+
+  def __len__(self):
+    return len(self.embeddings)
+  def __getitem__(self, index):
+    return self.embeddings[index], self.dataset[index][1]  # Return embedding and label
+  
+  def get_embedding(self, index):
+    return self.embeddings[index]  # Return embedding for the given index
+  
+  def get_label(self, index):
+    return self.dataset[index][1]  # Return label for the given indexs
