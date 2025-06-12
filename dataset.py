@@ -4,6 +4,7 @@ import os
 import re
 import random
 import torch
+import torch.nn as nn
 from torch.utils.data import Dataset
 from torchvision import transforms as T
 
@@ -13,6 +14,7 @@ import cv2
 from PIL import Image
 import os
 
+from transformers import AutoTokenizer, AutoModel
 
 class ImageDataset(Dataset):
   # Initialize your data from data_path using glob
@@ -514,7 +516,7 @@ class CelebADataset(Dataset):
 
 
 class EmbeddedDataset(Dataset):
-  def __init__(self, dataset, model):
+  def __init__(self, dataset: Dataset, model: nn.Module):
     """
     Args:
         dataset (Dataset): The dataset to be embedded.
@@ -523,18 +525,42 @@ class EmbeddedDataset(Dataset):
     self.dataset = dataset
     self.model = model
     self.embeddings = []
-    
+    self.tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
+    self.nomic = AutoModel.from_pretrained('nomic-ai/nomic-embed-text-v1.5', trust_remote_code=True, safe_serialization=True)
+
+    self.compute_labels()
     # Precompute embeddings for the entire dataset
     self.compute_embeddings()
 
   def compute_embeddings(self):
     self.model.eval()
+    self.nomic.eval()
     with torch.no_grad():
       for i in range(len(self.dataset)):
-        image, _ = self.dataset[i]
-        embedding = self.model.forward(image.unsqueeze(0))  # Add batch dimension
-        self.embeddings.append(embedding)  # Remove batch dimension
+        image, target = self.dataset[i]
 
+        # embed the image using the model
+        embedding = self.model.forward(image.unsqueeze(0))  # Add batch dimension
+        embedding = embedding.squeeze(0)
+        # get embeded label using the nomic model
+        target_label = target['label'] if isinstance(target, dict) else target
+        label_text = str(target_label)
+        label_embedding = self.labels_embeddings[self.labels.index(label_text)]
+        # Combine the image embedding and label embedding
+        combined_embedding = torch.cat((embedding, label_embedding), dim=0)
+        self.embeddings.append(combined_embedding)
+
+    # Stack the embeddings into a single tensor
+    self.embeddings = torch.stack(self.embeddings)  # Convert list to tensor
+  def get_embeddings(self):
+    """
+    Get the embeddings for the dataset.
+    
+    Returns:
+        torch.Tensor: The embeddings for the dataset.
+    """
+    return self.embeddings  # Return the precomputed embeddings
+  
   def __len__(self):
     return len(self.embeddings)
   def __getitem__(self, index):
@@ -545,3 +571,40 @@ class EmbeddedDataset(Dataset):
   
   def get_label(self, index):
     return self.dataset[index][1]  # Return label for the given indexs
+  
+  def compute_labels(self):
+    """
+    Compute labels for the dataset.
+    
+    This method assumes that the dataset returns a tuple of (image, target),
+    where target is a dictionary containing the label under the key 'label'.
+    """
+    # get labels from the dataset
+    self.labels = []
+    for i in range(len(self.dataset)):
+      _, target = self.dataset[i]
+      if isinstance(target, dict):
+        label = target['label']
+      else:
+        label = target
+      self.labels.append(label)
+
+    # get distinct labels with order
+    self.labels = sorted(set(self.labels))
+
+    # convert labels to string if they are not already
+    self.labels = [str(label) for label in self.labels]
+    # encode labels to embeddings
+    labels_embeddings = self.tokenizer(self.labels, padding=True, truncation=True, return_tensors='pt')
+
+    with torch.no_grad():
+      self.labels_embeddings = self.nomic(**labels_embeddings).last_hidden_state.mean(dim=1)
+
+  def get_labels_embeddings(self):
+    """
+    Get the embeddings for the labels.
+    
+    Returns:
+        torch.Tensor: The embeddings for the labels.
+    """
+    return self.labels_embeddings  # Return the precomputed label embeddings

@@ -22,6 +22,24 @@ import dataset as ds # type: ignore
 import model as md # type: ignore
 
 
+def load_model_state(model, state_dict_path):
+  """
+  Load the state dictionary into the model.
+  
+  Args:
+    model (torch.nn.Module): The model to load the state dictionary into.
+    state_dict_path (str): The path to the state dictionary file.
+  
+  Returns:
+    torch.nn.Module: The model with the loaded state dictionary.
+  """
+  if os.path.exists(state_dict_path):
+    model.load_state_dict(torch.load(state_dict_path, weights_only=False))
+    print(f"Model state loaded from {state_dict_path}")
+  else:
+    print(f"State dictionary file {state_dict_path} does not exist.")
+  return model
+
 def main(dataset, model):
   # define batch_size
   batch_size = 64
@@ -55,24 +73,26 @@ if __name__ == "__main__":
         './datasets/gi4e',
         transform=transforms.Compose([transforms.ToPILImage(), transforms.Resize((224, 224)), transforms.ToTensor()]),
         is_classification=True),
-    'gi4e_raw_eyes': ds.ImageDataset(
-      './datasets/gi4e_raw_eyes',
-      transform=transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor()]),
-      file_extension='png'),
-    'gi4e_detected_eyes': ds.ImageDataset(
-      './datasets/gi4e_eyes/20250521_200316',
-      transform=transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor()]),
-      file_extension='png'),
+    # 'gi4e_raw_eyes': ds.ImageDataset(
+    #   './datasets/gi4e_raw_eyes',
+    #   transform=transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor()]),
+    #   file_extension='png'),
+    # 'gi4e_detected_eyes': ds.ImageDataset(
+    #   './datasets/gi4e_eyes/20250521_200316',
+    #   transform=transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor()]),
+    #   file_extension='png'),
   }
 
   models = [
-    torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.DEFAULT),
-    torchvision.models.densenet121(weights=torchvision.models.DenseNet121_Weights.DEFAULT),
-    torchvision.models.vgg16(weights=torchvision.models.VGG16_Weights.DEFAULT)
+    load_model_state(torchvision.models.resnet50(weights=None), './models/ResNet/20250611_103405/fold_4.pth'),
+    # torchvision.models.densenet121(weights=torchvision.models.DenseNet121_Weights.DEFAULT),
+    # load_model_state(torchvision.models.vgg16(weights=None), './models/vgg16.pth'),
   ]
 
   embedded_models = [md.FeatureExtractor(model) for model in models]
   classifier_models = [md.Classifier(model) for model in models]
+  print('Embedded models:', [model._get_name() for model in embedded_models])
+  print('Classifier models:', [model._get_name() for model in classifier_models])
 
   classifier_df = pd.DataFrame(columns=['key', 'dataset', 'model'])
   result_df = pd.DataFrame(columns=['dataset', 'model', 'avg_loss', 'avg_accuracy', 'total_time'])
