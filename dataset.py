@@ -532,9 +532,8 @@ class EmbeddedDataset(Dataset):
     with torch.no_grad():
       for i in range(len(self.dataset)):
         image, _ = self.dataset[i]
-        image = image.unsqueeze(0)  # Add batch dimension
         embedding = self.model(image)
-        self.embeddings.append(embedding.squeeze(0))  # Remove batch dimension
+        self.embeddings.append(embedding)  # Remove batch dimension
 
   def __len__(self):
     return len(self.embeddings)

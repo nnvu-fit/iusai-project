@@ -14,10 +14,7 @@ class FeatureExtractor(nn.Module):
     self.backbone = backbone
 
     # drop the last layer
-    if isinstance(backbone, nn.Sequential):
-      self.features = nn.Sequential(*list(backbone.children())[:-1])
-    else:
-      self.features = nn.Sequential(*list(backbone.children()))
+    self.features = nn.Sequential(*list(backbone.children())[:-1])
 
     self.__class__.__name__ = f"FeatureExtractor({backbone.__class__.__name__})"
 
@@ -31,10 +28,7 @@ class Classifier(nn.Module):
     super(Classifier, self).__init__()
 
     # get the last layer from the backbone
-    if isinstance(backbone, nn.Sequential):
-      self.fc = backbone[-1]
-    else:
-      self.fc = backbone.fc if hasattr(backbone, 'fc') else backbone.classifier
+    self.fc = backbone[-1]
 
     self.__class__.__name__ = f"Classifier({backbone.__class__.__name__})"
 
