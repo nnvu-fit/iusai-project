@@ -16,7 +16,8 @@ class FeatureExtractor(nn.Module):
     # drop the last layer
     self.features = nn.Sequential(*list(backbone.children())[:-1])
 
-    self.__class__.__name__ = f"FeatureExtractor({backbone.__class__.__name__})"
+  def _get_name(self):
+    return f"FeatureExtractor({self.backbone.__class__.__name__})"
 
   def forward(self, x: torch.Tensor) -> torch.Tensor:
     x = self.features(x)
@@ -26,11 +27,13 @@ class FeatureExtractor(nn.Module):
 class Classifier(nn.Module):
   def __init__(self, backbone: nn.Module):
     super(Classifier, self).__init__()
+    self.backbone = backbone
 
     # get the last layer from the backbone
-    self.fc = backbone[-1]
+    self.fc = list(backbone.children())[-1]
 
-    self.__class__.__name__ = f"Classifier({backbone.__class__.__name__})"
+  def _get_name(self):
+    return f"Classifier({self.backbone.__class__.__name__})"
 
   def forward(self, x: torch.Tensor) -> torch.Tensor:
     return self.fc(x)
