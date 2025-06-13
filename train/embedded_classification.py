@@ -97,6 +97,9 @@ if __name__ == "__main__":
   classifier_df = pd.DataFrame(columns=['key', 'dataset', 'model'])
   result_df = pd.DataFrame(columns=['dataset', 'model', 'avg_loss', 'avg_accuracy', 'total_time'])
 
+  print('--' * 30)
+  # Loop through datasets and models to create the classifier_df
+  print('Starting to get features for datasets...')
   for name, dataset in datasets.items():
     for model in embedded_models:
       print(f'Getting features for {name} dataset with {model._get_name()}')
@@ -117,9 +120,10 @@ if __name__ == "__main__":
       })], ignore_index=True)
 
       print(f'Finished getting features for {name} dataset with {model._get_name()}')
-
-  print('Starting training...')
-
+  
+  print('--' * 30)
+  # Loop through the classifier_df to train each model on each dataset
+  print('Starting to train models on datasets...')
   for index, row in classifier_df.iterrows():
     dataset = row['dataset']
     model = row['model']

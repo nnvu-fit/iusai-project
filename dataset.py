@@ -547,11 +547,8 @@ class EmbeddedDataset(Dataset):
         label_text = str(target_label)
         label_embedding = self.labels_embeddings[self.labels.index(label_text)]
         # Combine the image embedding and label embedding
-        combined_embedding = torch.cat((embedding, label_embedding), dim=0)
-        self.embeddings.append(combined_embedding)
+        self.embeddings.append(embedding - label_embedding, target)
 
-    # Stack the embeddings into a single tensor
-    self.embeddings = torch.stack(self.embeddings)  # Convert list to tensor
   def get_embeddings(self):
     """
     Get the embeddings for the dataset.
@@ -564,7 +561,7 @@ class EmbeddedDataset(Dataset):
   def __len__(self):
     return len(self.embeddings)
   def __getitem__(self, index):
-    return self.embeddings[index], self.dataset[index][1]  # Return embedding and label
+    return self.embeddings[index]  # Return embedding and label
   
   def get_embedding(self, index):
     return self.embeddings[index]  # Return embedding for the given index
