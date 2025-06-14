@@ -5,8 +5,10 @@ import re
 import random
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import Dataset
 from torchvision import transforms as T
+
 
 import numpy as np
 import pandas as pd
@@ -527,6 +529,7 @@ class EmbeddedDataset(Dataset):
     self.embeddings = []
     self.tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
     self.nomic = AutoModel.from_pretrained('nomic-ai/nomic-embed-text-v1.5', trust_remote_code=True, safe_serialization=True)
+    self.matryoshka_dim = 512
 
     self.compute_labels()
     # Precompute embeddings for the entire dataset
@@ -534,7 +537,6 @@ class EmbeddedDataset(Dataset):
 
   def compute_embeddings(self):
     self.model.eval()
-    self.nomic.eval()
     with torch.no_grad():
       for i in range(len(self.dataset)):
         image, target = self.dataset[i]
@@ -544,10 +546,11 @@ class EmbeddedDataset(Dataset):
         embedding = embedding.squeeze(0)
         # get embeded label using the nomic model
         target_label = target['label'] if isinstance(target, dict) else target
-        label_text = str(target_label)
-        label_embedding = self.labels_embeddings[self.labels.index(label_text)]
+        label = str(target_label.item() if isinstance(target_label, torch.Tensor) else target_label)
+        label_index = self.labels.index(label) if label in self.labels else None
+        label_embedding = self.labels_embeddings[self.labels.index(label)]
         # Combine the image embedding and label embedding
-        self.embeddings.append(embedding - label_embedding, target)
+        self.embeddings.append((embedding - label_embedding, label_index))
 
   def get_embeddings(self):
     """
@@ -584,7 +587,7 @@ class EmbeddedDataset(Dataset):
         label = target['label']
       else:
         label = target
-      self.labels.append(label)
+      self.labels.append(label.item() if isinstance(label, torch.Tensor) else label)
 
     # get distinct labels with order
     self.labels = sorted(set(self.labels))
@@ -595,13 +598,16 @@ class EmbeddedDataset(Dataset):
     labels_embeddings = self.tokenizer(self.labels, padding=True, truncation=True, return_tensors='pt')
 
     with torch.no_grad():
-      self.labels_embeddings = self.nomic(**labels_embeddings).last_hidden_state.mean(dim=1)
+      self.labels_embeddings = self.nomic(**labels_embeddings)
 
-  def get_labels_embeddings(self):
-    """
-    Get the embeddings for the labels.
-    
-    Returns:
-        torch.Tensor: The embeddings for the labels.
-    """
-    return self.labels_embeddings  # Return the precomputed label embeddings
+    embeddings = self.max_pooling(self.labels_embeddings, labels_embeddings['attention_mask'])
+    embeddings = F.layer_norm(embeddings, normalized_shape=(embeddings.shape[1],))
+    # Normalize the embeddings
+    embeddings = F.normalize(embeddings, p=2, dim=1)
+    # Store the embeddings
+    self.labels_embeddings = embeddings
+
+  def max_pooling(self, model_output, attention_mask):
+    token_embeddings = model_output[0]
+    input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+    return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)

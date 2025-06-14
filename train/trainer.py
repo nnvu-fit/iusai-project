@@ -126,7 +126,6 @@ class ClassifierTrainer:
         inputs, targets = inputs.to(self.device), targets.to(self.device)
         self.optimizer.zero_grad()
         outputs = self.model(inputs)
-        print(f'inputs shape: {inputs.shape}, targets shape: {targets.shape}, outputs shape: {outputs.shape}')
         loss = self.loss_fn(outputs, targets)
         loss.backward()
         self. optimizer.step()

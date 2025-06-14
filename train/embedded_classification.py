@@ -40,7 +40,7 @@ def load_model_state(model, state_dict_path):
     print(f"State dictionary file {state_dict_path} does not exist.")
   return model
 
-def main(dataset, model):
+def train_process(dataset, model):
   # define batch_size
   batch_size = 64
 
@@ -90,7 +90,7 @@ if __name__ == "__main__":
   ]
 
   embedded_models = [md.FeatureExtractor(model) for model in models]
-  classifier_models = [md.Classifier(model) for model in models]
+  classifier_models = [md.Classifier(model, 103) for model in embedded_models]
   print('Embedded models:', [model._get_name() for model in embedded_models])
   print('Classifier models:', [model._get_name() for model in classifier_models])
 
@@ -105,8 +105,7 @@ if __name__ == "__main__":
       print(f'Getting features for {name} dataset with {model._get_name()}')
 
       # get the classifier model from the model
-      classifier_model = next((m for m in classifier_models if m._get_name() ==
-                              model._get_name().replace('FeatureExtractor', 'Classifier')), None)
+      classifier_model = next((m for m in classifier_models if m.backbone._get_name() == model._get_name()), None)
       if classifier_model is None:
         print(f'Classifier model not found for {model._get_name()}')
         continue
@@ -132,7 +131,7 @@ if __name__ == "__main__":
     print(f'Running {key} dataset with {model._get_name()}')
     # do the train
     start_time = time.time()
-    scored, loss = main(dataset, model)
+    scored, loss = train_process(dataset, model)
     end_time = time.time()
     total_time = end_time - start_time
     print(f'Finished {key} dataset with {model._get_name()}')
