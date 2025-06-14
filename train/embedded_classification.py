@@ -142,7 +142,7 @@ if __name__ == "__main__":
         'model': [model._get_name()],
         'dataset': [dataset.__class__.__name__],
         'avg_loss': [loss],
-        'avg_accuracy': [scored],
+        'avg_accuracy': [100*(1 - scored)],
         'total_time': [total_time]
     })], ignore_index=True)
   print('Finished training all models')
