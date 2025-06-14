@@ -18,6 +18,8 @@ import os
 
 from transformers import AutoTokenizer, AutoModel
 
+from model import FeatureExtractor
+
 class ImageDataset(Dataset):
   # Initialize your data from data_path using glob
   def __init__(self, data_path, file_extension='jpg', transform=None):
@@ -518,11 +520,11 @@ class CelebADataset(Dataset):
 
 
 class EmbeddedDataset(Dataset):
-  def __init__(self, dataset: Dataset, model: nn.Module):
+  def __init__(self, dataset: Dataset, model: FeatureExtractor):
     """
     Args:
         dataset (Dataset): The dataset to be embedded.
-        model (nn.Module): The model to be used for embedding.
+        model (FeatureExtractor): The model to be used for embedding.
     """
     self.dataset = dataset
     self.model = model
@@ -543,7 +545,7 @@ class EmbeddedDataset(Dataset):
 
         # embed the image using the model
         embedding = self.model.forward(image.unsqueeze(0))  # Add batch dimension
-        embedding = embedding.squeeze(0)
+        embedding = embedding.squeeze()
         # get embeded label using the nomic model
         target_label = target['label'] if isinstance(target, dict) else target
         label = str(target_label.item() if isinstance(target_label, torch.Tensor) else target_label)
@@ -601,6 +603,9 @@ class EmbeddedDataset(Dataset):
       self.labels_embeddings = self.nomic(**labels_embeddings)
 
     embeddings = self.max_pooling(self.labels_embeddings, labels_embeddings['attention_mask'])
+    # scale the embeddings to the size of the model.feature_output_size
+    embeddings = nn.Linear(embeddings.shape[1], self.model.out_features)(embeddings)
+    # Apply layer normalization to the embeddings
     embeddings = F.layer_norm(embeddings, normalized_shape=(embeddings.shape[1],))
     # Normalize the embeddings
     embeddings = F.normalize(embeddings, p=2, dim=1)
