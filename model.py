@@ -23,6 +23,8 @@ class FeatureExtractor(nn.Module):
       output_size = 25088  # VGG16/19
     elif isinstance(backbone, models.MobileNetV2):
       output_size = 1280  # MobileNetV2
+    elif isinstance(backbone, models.DenseNet):
+      output_size = 1024  # DenseNet121
     else:
       raise ValueError("Unsupported backbone model")
     self.fc1 = nn.Linear(output_size, 768)  # Fully connected layer to reduce dimensions
