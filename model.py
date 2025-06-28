@@ -21,10 +21,14 @@ class FeatureExtractor(nn.Module):
       output_size = 2048
     elif isinstance(backbone, models.VGG):
       output_size = 25088  # VGG16/19
+      self.features.append(nn.Flatten())
     elif isinstance(backbone, models.MobileNetV2):
       output_size = 1280  # MobileNetV2
     elif isinstance(backbone, models.DenseNet):
       output_size = 1024  # DenseNet121
+      self.features.append(nn.ReLU(inplace=True))
+      self.features.append(nn.AdaptiveAvgPool2d((1, 1)))
+      self.features.append(nn.Flatten())
     else:
       raise ValueError("Unsupported backbone model")
     self.fc1 = nn.Linear(output_size, 768)  # Fully connected layer to reduce dimensions

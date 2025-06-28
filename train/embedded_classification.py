@@ -84,9 +84,9 @@ if __name__ == "__main__":
   }
 
   models = [
-    load_model_state(torchvision.models.resnet50(weights=None), './models/ResNet/20250611_103405/fold_4.pth'),
-    # torchvision.models.densenet121(weights=torchvision.models.DenseNet121_Weights.DEFAULT),
-    # load_model_state(torchvision.models.vgg16(weights=None), './models/vgg16.pth'),
+    # load_model_state(torchvision.models.resnet50(weights=None), './models/ResNet/20250626_220359/fold_4.pth'),
+    # load_model_state(torchvision.models.densenet121(weights=None), './models/DenseNet/20250626_222040/fold_4.pth'),
+    load_model_state(torchvision.models.vgg16(weights=None), './models/VGG/20250626_223824/fold_4.pth'),
   ]
 
   embedded_models = [md.FeatureExtractor(model) for model in models]
