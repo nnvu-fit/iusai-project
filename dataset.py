@@ -572,10 +572,10 @@ class EmbeddedDataset(Dataset):
     self.compute_labels()
 
     # Apply the function to each embedding
-    for i, label_embedding in range(1, len(self.labels_embeddings) + 1):
+    for i in range(0, len(self.labels_embeddings)):
+      label_embedding = self.labels_embeddings[i]  # Get the embedding for the label
       # Apply the function to the embedding
-      func_result = func(i) * label_embedding
-      self.labels_embeddings[i] = func_result
+      self.labels_embeddings[i] = func(i + 1) * label_embedding
 
     # Recompute the embeddings with the updated labels
     self.embeddings = []

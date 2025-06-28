@@ -115,9 +115,9 @@ if __name__ == "__main__":
   }
 
   models = [
-    load_model_state(torchvision.models.resnet50(weights=None), './models/ResNet/20250626_220359/fold_4.pth'),
-    load_model_state(torchvision.models.densenet121(weights=None), './models/DenseNet/20250626_222040/fold_4.pth'),
-    load_model_state(torchvision.models.vgg16(weights=None), './models/VGG/20250626_223824/fold_4.pth'),
+    load_model_state(torchvision.models.resnet50(weights=None), './models/ResNet/20250627_233618/fold_4.pth'),
+    load_model_state(torchvision.models.densenet121(weights=None), './models/DenseNet/20250627_234503/fold_4.pth'),
+    load_model_state(torchvision.models.vgg16(weights=None), './models/VGG/20250627_235456/fold_4.pth'),
   ]
 
   embedded_models = [md.FeatureExtractor(model) for model in models]
@@ -160,11 +160,13 @@ if __name__ == "__main__":
     lambda x: x * x,  # Example function to square the embeddings
   ]
   for func in funcList:
+    # apply the function to the labels embeddings
+    func_source = getsource(func)
     print('--' * 30)
-    print(f'Applying function: {func.__name__}')
+    print(f'Applying function: {func_source}')
     # apply the function to the labels embeddings
     classifier_df.apply(lambda row: row['dataset'].apply_function_to_labels_embeddings(func), axis=1)
-    print(f'Finished applying function: {func.__name__}')
+    print(f'Finished applying function: {func_source}')
 
     result_df = train_models_on_datasets(classifier_df)
     print(result_df)
