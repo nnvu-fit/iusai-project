@@ -2,6 +2,7 @@
 import os
 import sys
 import time
+from inspect import getsource
 
 # Using torchvision to create a dataset
 import cv2
@@ -99,14 +100,14 @@ def train_models_on_datasets(classifier_df):
 if __name__ == "__main__":
 
   datasets = {
-    'gi4e_full': ds.Gi4eDataset(
-        './datasets/gi4e',
-        transform=transforms.Compose([transforms.ToPILImage(), transforms.Resize((224, 224)), transforms.ToTensor()]),
-        is_classification=True),
-    'gi4e_raw_eyes': ds.ImageDataset(
-      './datasets/gi4e_raw_eyes',
-      transform=transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor()]),
-      file_extension='png'),
+    # 'gi4e_full': ds.Gi4eDataset(
+    #     './datasets/gi4e',
+    #     transform=transforms.Compose([transforms.ToPILImage(), transforms.Resize((224, 224)), transforms.ToTensor()]),
+    #     is_classification=True),
+    # 'gi4e_raw_eyes': ds.ImageDataset(
+    #   './datasets/gi4e_raw_eyes',
+    #   transform=transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor()]),
+    #   file_extension='png'),
     'gi4e_detected_eyes': ds.ImageDataset(
       './datasets/gi4e_eyes/20250521_200316',
       transform=transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor()]),
@@ -132,6 +133,7 @@ if __name__ == "__main__":
   print('Starting to get features for datasets...')
   for name, dataset in datasets.items():
     for model in embedded_models:
+      print('--' * 5)
       print(f'Getting features for {name} dataset with {model._get_name()}')
 
       # get the classifier model from the model
@@ -152,6 +154,7 @@ if __name__ == "__main__":
   
   # retrain the models with updated dataset by applying a function to the labels embeddings
   funcList = [
+    lambda x: 1,  # Example function to return a constant value
     lambda x: x,  # Identity function, no change
     lambda x: x * 2,  # Example function to double the embeddings
     lambda x: x * x,  # Example function to square the embeddings

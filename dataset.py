@@ -1,6 +1,7 @@
 import glob
 import json
 import os
+from inspect import getsource
 import re
 import random
 import torch
@@ -539,7 +540,8 @@ class EmbeddedDataset(Dataset):
 
   def _get_name(self):
     if hasattr(self, 'func'):
-      return f"EmbeddedDataset({self.dataset.__class__.__name__}, func={self.func.__name__})"
+      func_source = getsource(self.func)
+      return f"EmbeddedDataset({self.dataset.__class__.__name__}, func={func_source})"
     return f"EmbeddedDataset({self.dataset.__class__.__name__})"
 
   def compute_embeddings(self):
@@ -570,9 +572,10 @@ class EmbeddedDataset(Dataset):
     self.compute_labels()
 
     # Apply the function to each embedding
-    for i, label_embedding in enumerate(self.labels_embeddings, start=1):
+    for i, label_embedding in range(1, len(self.labels_embeddings) + 1):
       # Apply the function to the embedding
-      self.labels_embeddings[i] = func(i) * label_embedding
+      func_result = func(i) * label_embedding
+      self.labels_embeddings[i] = func_result
 
     # Recompute the embeddings with the updated labels
     self.embeddings = []
