@@ -66,6 +66,36 @@ def train_process(dataset, model):
   # return model scored, train_avg_lost
   return model_scored, avg_loss
 
+def train_models_on_datasets(classifier_df):
+  result_df = pd.DataFrame(columns=['dataset', 'model', 'avg_loss', 'avg_accuracy', 'total_time'])
+  
+  print('--' * 30)
+  print('Starting to train models on datasets...')
+  for index, row in classifier_df.iterrows():
+    dataset = row['dataset']
+    model = row['model']
+    key = row['key']
+
+    print(f'Running {key} dataset with {model._get_name()}')
+    # do the train
+    start_time = time.time()
+    scored, loss = train_process(dataset, model)
+    end_time = time.time()
+    total_time = end_time - start_time
+    print(f'Finished {key} dataset with {model._get_name()}')
+    print('----------------------')
+
+    # save the result
+    result_df = pd.concat([result_df, pd.DataFrame({
+        'model': [model._get_name()],
+        'dataset': [dataset.__class__.__name__],
+        'avg_loss': [loss],
+        'avg_accuracy': [100*(1 - scored)],
+        'total_time': [total_time]
+    })], ignore_index=True)
+  print('Finished training all models')
+  return result_df
+
 if __name__ == "__main__":
 
   datasets = {
@@ -73,19 +103,19 @@ if __name__ == "__main__":
         './datasets/gi4e',
         transform=transforms.Compose([transforms.ToPILImage(), transforms.Resize((224, 224)), transforms.ToTensor()]),
         is_classification=True),
-    # 'gi4e_raw_eyes': ds.ImageDataset(
-    #   './datasets/gi4e_raw_eyes',
-    #   transform=transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor()]),
-    #   file_extension='png'),
-    # 'gi4e_detected_eyes': ds.ImageDataset(
-    #   './datasets/gi4e_eyes/20250521_200316',
-    #   transform=transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor()]),
-    #   file_extension='png'),
+    'gi4e_raw_eyes': ds.ImageDataset(
+      './datasets/gi4e_raw_eyes',
+      transform=transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor()]),
+      file_extension='png'),
+    'gi4e_detected_eyes': ds.ImageDataset(
+      './datasets/gi4e_eyes/20250521_200316',
+      transform=transforms.Compose([transforms.Resize((224, 224)),transforms.ToTensor()]),
+      file_extension='png'),
   }
 
   models = [
-    # load_model_state(torchvision.models.resnet50(weights=None), './models/ResNet/20250626_220359/fold_4.pth'),
-    # load_model_state(torchvision.models.densenet121(weights=None), './models/DenseNet/20250626_222040/fold_4.pth'),
+    load_model_state(torchvision.models.resnet50(weights=None), './models/ResNet/20250626_220359/fold_4.pth'),
+    load_model_state(torchvision.models.densenet121(weights=None), './models/DenseNet/20250626_222040/fold_4.pth'),
     load_model_state(torchvision.models.vgg16(weights=None), './models/VGG/20250626_223824/fold_4.pth'),
   ]
 
@@ -120,30 +150,18 @@ if __name__ == "__main__":
 
       print(f'Finished getting features for {name} dataset with {model._get_name()}')
   
-  print('--' * 30)
-  # Loop through the classifier_df to train each model on each dataset
-  print('Starting to train models on datasets...')
-  for index, row in classifier_df.iterrows():
-    dataset = row['dataset']
-    model = row['model']
-    key = row['key']
+  # retrain the models with updated dataset by applying a function to the labels embeddings
+  funcList = [
+    lambda x: x,  # Identity function, no change
+    lambda x: x * 2,  # Example function to double the embeddings
+    lambda x: x * x,  # Example function to square the embeddings
+  ]
+  for func in funcList:
+    print('--' * 30)
+    print(f'Applying function: {func.__name__}')
+    # apply the function to the labels embeddings
+    classifier_df.apply(lambda row: row['dataset'].apply_function_to_labels_embeddings(func), axis=1)
+    print(f'Finished applying function: {func.__name__}')
 
-    print(f'Running {key} dataset with {model._get_name()}')
-    # do the train
-    start_time = time.time()
-    scored, loss = train_process(dataset, model)
-    end_time = time.time()
-    total_time = end_time - start_time
-    print(f'Finished {key} dataset with {model._get_name()}')
-    print('----------------------')
-
-    # save the result
-    result_df = pd.concat([result_df, pd.DataFrame({
-        'model': [model._get_name()],
-        'dataset': [dataset.__class__.__name__],
-        'avg_loss': [loss],
-        'avg_accuracy': [100*(1 - scored)],
-        'total_time': [total_time]
-    })], ignore_index=True)
-  print('Finished training all models')
-  print(result_df)
+    result_df = train_models_on_datasets(classifier_df)
+    print(result_df)

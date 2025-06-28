@@ -537,6 +537,11 @@ class EmbeddedDataset(Dataset):
     # Precompute embeddings for the entire dataset
     self.compute_embeddings()
 
+  def _get_name(self):
+    if hasattr(self, 'func'):
+      return f"EmbeddedDataset({self.dataset.__class__.__name__}, func={self.func.__name__})"
+    return f"EmbeddedDataset({self.dataset.__class__.__name__})"
+
   def compute_embeddings(self):
     self.model.eval()
     with torch.no_grad():
@@ -553,6 +558,25 @@ class EmbeddedDataset(Dataset):
         label_embedding = self.labels_embeddings[self.labels.index(label)]
         # Combine the image embedding and label embedding
         self.embeddings.append((embedding - label_embedding, label_index))
+
+  def apply_function_to_labels_embeddings(self, func = lambda x: x):
+    """
+    Move the cluster of embeddings to the specified function.
+    
+    Args:
+        func (callable): The function to apply to the embeddings.
+    """
+    self.func = func
+    self.compute_labels()
+
+    # Apply the function to each embedding
+    for i, label_embedding in enumerate(self.labels_embeddings, start=1):
+      # Apply the function to the embedding
+      self.labels_embeddings[i] = func(i) * label_embedding
+
+    # Recompute the embeddings with the updated labels
+    self.embeddings = []
+    self.compute_embeddings()
 
   def get_embeddings(self):
     """
@@ -609,8 +633,8 @@ class EmbeddedDataset(Dataset):
     embeddings = F.layer_norm(embeddings, normalized_shape=(embeddings.shape[1],))
     # Normalize the embeddings
     embeddings = F.normalize(embeddings, p=2, dim=1)
-    # Store the embeddings
-    self.labels_embeddings = embeddings
+    # Store the embeddings, the labels_embeddings should have absolute values
+    self.labels_embeddings = abs(embeddings)
 
   def max_pooling(self, model_output, attention_mask):
     token_embeddings = model_output[0]

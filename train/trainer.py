@@ -91,7 +91,7 @@ class ClassifierTrainer:
       print(f'Fold {fold+1}/{k}, Total Test Loss: {total_loss:.4f}, Fold accuracy: {100*(1 - fold_loss):.4f}')
 
       # save model by model
-      model_path_dir = f".\\models\\{self.model.__class__.__name__}\\{self.timestamp}"
+      model_path_dir = f".\\models\\{self.model._get_name()}\\{self.timestamp}"
       if not os.path.exists(model_path_dir):
         os.makedirs(model_path_dir)
       torch.save(self.model.state_dict(), f"{model_path_dir}\\fold_{fold}.pth")
