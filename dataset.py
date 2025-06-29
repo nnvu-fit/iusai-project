@@ -532,7 +532,6 @@ class EmbeddedDataset(Dataset):
     self.embeddings = []
     self.tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
     self.nomic = AutoModel.from_pretrained('nomic-ai/nomic-embed-text-v1.5', trust_remote_code=True, safe_serialization=True)
-    self.matryoshka_dim = 512
 
     self.compute_labels()
     # Precompute embeddings for the entire dataset
