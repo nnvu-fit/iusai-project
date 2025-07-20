@@ -98,7 +98,6 @@ class ClassifierTrainer:
 
     return [total_loss / k, report_metric]
 
-
   def train(self, train_loader, test_loader, epochs=1):
     """
     Trains a PyTorch model on a given dataset using the specified optimizer and loss function.
@@ -193,7 +192,43 @@ class ClassifierTrainer:
         f.write(report)
         f.write('\n')
         f.write(str(confusion))
-        
+
+class TripletTrainer(ClassifierTrainer):
+
+  def train(self, train_loader, test_loader, epochs=1):
+    """
+    Trains a PyTorch model on a given dataset using the specified optimizer and loss function.
+
+    Args:
+      model (torch.nn.Module): The PyTorch model to train.
+      optimizer (torch.optim.Optimizer): The optimizer to use for training.
+      loss_fn (callable): The loss function to use for training.
+      train_dataset (torch.utils.data.Dataset): The dataset to use for training.
+      test_dataset (torch.utils.data.Dataset): The dataset to use for testing.
+      num_epochs (int, optional): The number of epochs to train for. Defaults to 1.
+      device (str, optional): The device to use for training. If None, defaults to 'cuda' if available, else 'cpu'.
+
+    Returns:
+      None
+    """
+    self.model.to(self.device)
+    ## set start training in time
+    start_time = time.time()
+    report_metric = []
+
+    # loop over epochs
+    for epoch in range(epochs):
+      self.model.train()
+      train_loss = 0.0
+      for inputs, targets in train_loader:
+        inputs, targets = inputs.to(self.device), targets.to(self.device)
+        self.optimizer.zero_grad()
+        outputs = self.model(inputs)
+        loss = self.loss_fn(outputs, targets)
+        loss.backward()
+        self.optimizer.step()
+        train_loss += loss.item() * inputs.size(0)
+
 
 def get_device():
   """
