@@ -641,41 +641,18 @@ class EmbeddedDataset(Dataset):
     return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
 
 
-class TripletDataset(Dataset):
-  def __init__(self, dataset: Dataset, model: FeatureExtractor):
-    """
-    Args:
-        dataset (Dataset): The dataset to be embedded.
-        model (FeatureExtractor): The model to be used for embedding.
-    """
-    self.dataset = dataset
-    self.model = model
-    self.embeddings = []
-    self.tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
-    self.nomic = AutoModel.from_pretrained('nomic-ai/nomic-embed-text-v1.5', trust_remote_code=True, safe_serialization=True)
-
-    self.compute_labels()
-    # Precompute embeddings for the entire dataset
-    self.compute_embeddings()
-
-  def _get_name(self):
-    if hasattr(self, 'func'):
-      func_source = getsource(self.func)
-      return f"TripletDataset({self.dataset.__class__.__name__}, func={func_source})"
-    return f"TripletDataset({self.dataset.__class__.__name__})"
-  
+class TripletImageDataset(ImageDataset):
+  # override __get_item__ to return triplets
   def __getitem__(self, index):
-    # get the image path and target from the data
-    anchor, positive, negative = self.get_image(index)
+    anchor_image, anchor_label = self.get_image(index)
+    positive_image, positive_label = self.get_image(random.choice(
+        [i for i in range(len(self)) if i != index and self.label(i) == anchor_label]))
+    negative_image, negative_label = self.get_image(random.choice(
+        [i for i in range(len(self)) if i != index and self.label(i) != anchor_label]))
 
     if self.transform:
-      anchor = self.transform(anchor)
-      positive = self.transform(positive)
-      negative = self.transform(negative)
+      anchor_image = self.transform(anchor_image)
+      positive_image = self.transform(positive_image)
+      negative_image = self.transform(negative_image)
 
-    # embed the images using the model
-    anchor_embedding = self.model.forward(anchor.unsqueeze(0))  # Add batch dimension
-    positive_embedding = self.model.forward(positive.unsqueeze(0))  # Add batch dimension
-    negative_embedding = self.model.forward(negative.unsqueeze(0))  # Add batch dimension
-
-    return anchor_embedding.squeeze(), positive_embedding.squeeze(), negative_embedding.squeeze()
+    return anchor_image, positive_image, negative_image

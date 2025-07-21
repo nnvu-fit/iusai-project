@@ -108,7 +108,7 @@ def train(dataset, model):
 if __name__ == '__main__':
   import pandas as pd
   import torchvision
-  from dataset import ImageDataset, TripletDataset
+  from dataset import TripletImageDataset
   from model import FeatureExtractor, Classifier
 
   train_process_df = pd.DataFrame(columns=['dataset', 'model'])
@@ -119,13 +119,13 @@ if __name__ == '__main__':
       torchvision.transforms.Resize((224, 224)),
       torchvision.transforms.ToTensor(),
   ])
-  image_path = 'path/to/your/image/directory'  # Replace with your image directory path
-  image_dataset = ImageDataset(image_path, transform=transform)
+  image_path = './datasets/gi4e_raw_eyes'  # Replace with your image directory path
+  image_dataset = TripletImageDataset(image_path, file_extension='png', transform=transform)
   model = FeatureExtractor(torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1))
-  train_process_df = train_process_df.append({
-      'dataset': TripletDataset(dataset=image_dataset, model=model),
-      'model': model
-  }, ignore_index=True)
+  train_process_df = pd.concat([train_process_df, pd.DataFrame({
+      'dataset': [image_dataset],
+      'model': [model]
+  })], ignore_index=True)
 
   # loop through datasets and train models
   for index, row in train_process_df.iterrows():
