@@ -518,7 +518,7 @@ class CelebADataset(Dataset):
 
 
 class EmbeddedDataset(Dataset):
-  def __init__(self, dataset: Dataset, model: FeatureExtractor):
+  def __init__(self, dataset: Dataset, model: FeatureExtractor, device='cpu'):
     """
     Args:
         dataset (Dataset): The dataset to be embedded.
@@ -529,6 +529,7 @@ class EmbeddedDataset(Dataset):
     self.embeddings = []
     self.tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
     self.nomic = AutoModel.from_pretrained('nomic-ai/nomic-embed-text-v1.5', trust_remote_code=True, safe_serialization=True)
+    self.device = device
 
     self.compute_labels()
     # Precompute embeddings for the entire dataset
@@ -541,6 +542,11 @@ class EmbeddedDataset(Dataset):
     return f"EmbeddedDataset({self.dataset.__class__.__name__})"
 
   def compute_embeddings(self):
+    """ Compute embeddings for the dataset.
+    This method assumes that the dataset returns a tuple of (image, target),
+    where target is a dictionary containing the label under the key 'label'.
+    """
+    self.model.to(self.device)
     self.model.eval()
     with torch.no_grad():
       for i in range(len(self.dataset)):
