@@ -518,7 +518,7 @@ class CelebADataset(Dataset):
 
 
 class EmbeddedDataset(Dataset):
-  def __init__(self, dataset: Dataset, model: FeatureExtractor, device='cpu'):
+  def __init__(self, dataset: Dataset, model: FeatureExtractor, device='cpu', is_moving_labels_to_function=False):
     """
     Args:
         dataset (Dataset): The dataset to be embedded.
@@ -530,6 +530,7 @@ class EmbeddedDataset(Dataset):
     self.tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
     self.nomic = AutoModel.from_pretrained('nomic-ai/nomic-embed-text-v1.5', trust_remote_code=True, safe_serialization=True)
     self.device = device
+    self.is_moving_labels_to_function = is_moving_labels_to_function
 
     self.compute_labels()
     # Precompute embeddings for the entire dataset
@@ -555,13 +556,21 @@ class EmbeddedDataset(Dataset):
         # embed the image using the model
         embedding = self.model.forward(image.unsqueeze(0))  # Add batch dimension
         embedding = embedding.squeeze()
+
         # get embeded label using the nomic model
         target_label = target['label'] if isinstance(target, dict) else target
         label = str(target_label.item() if isinstance(target_label, torch.Tensor) else target_label)
         label_index = self.labels.index(label) if label in self.labels else None
-        label_embedding = self.labels_embeddings[self.labels.index(label)]
-        # Combine the image embedding and label embedding
-        self.embeddings.append((embedding - label_embedding, label_index))
+        
+        # check if applying moving labels to function
+        if self.is_moving_labels_to_function:
+          # if so, apply the function to the embedding
+          label_embedding = self.labels_embeddings[self.labels.index(label)]
+          # Combine the image embedding and label embedding
+          embedding = embedding - label_embedding
+
+        # append the embedding and label index to the embeddings list
+        self.embeddings.append((embedding, label_index))
 
   def apply_function_to_labels_embeddings(self, func = lambda x: x):
     """

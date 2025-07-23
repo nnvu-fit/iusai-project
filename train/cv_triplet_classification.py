@@ -92,6 +92,7 @@ def triplet_train_process(dataset, model, k_fold=5, batch_size=64):
   # Return the trained model and the average loss
   return model, sum(loss_list) / len(loss_list), sum(test_loss_list) / len(test_loss_list)
 
+
 def classification_train_process(dataset, model, k_fold=5, batch_size=64):
   """
   Train the model on the given dataset and return the scored model and average loss.
@@ -168,6 +169,10 @@ def classification_train_process(dataset, model, k_fold=5, batch_size=64):
   print(f'Average loss over all folds: {sum(loss_list) / len(loss_list)}')
   print(f'Average test loss over all folds: {sum(test_loss_list) / len(test_loss_list)}')
 
+  # Return the trained model and the average loss
+  return model, sum(loss_list) / len(loss_list), sum(test_loss_list) / len(test_loss_list)
+
+
 def train(dataset, model, train_process='triplet', k_fold=5, batch_size=64):
   """
   Train the model on the given dataset and return the scored model and average loss.
@@ -183,7 +188,8 @@ def train(dataset, model, train_process='triplet', k_fold=5, batch_size=64):
   if train_process == 'triplet':
     trained_model, avg_loss, avg_test_loss = triplet_train_process(dataset, model, k_fold=k_fold, batch_size=batch_size)
   elif train_process == 'classification':
-    trained_model, avg_loss, avg_test_loss = classification_train_process(dataset, model, k_fold=k_fold, batch_size=batch_size)
+    trained_model, avg_loss, avg_test_loss = classification_train_process(
+        dataset, model, k_fold=k_fold, batch_size=batch_size)
   else:
     raise ValueError(f'Unknown training process: {train_process}')
   print('Training completed.')
@@ -196,52 +202,153 @@ if __name__ == '__main__':
   from dataset import ImageDataset, EmbeddedDataset, TripletImageDataset
   from model import FeatureExtractor, Classifier
 
-  triplet_df = pd.DataFrame(columns=['dataset_path', 'model'])
-  classifier_df = pd.DataFrame(columns=['dataset', 'model'])
+  triplet_df = pd.DataFrame(columns=['dataset_type','dataset_path', 'model', 'transform'])
+  classifier_df = pd.DataFrame(columns=['dataset', 'model', 'transform'])
   # DataFrame to store results of the training process
   result_df = pd.DataFrame(columns=['dataset', 'model', 'avg_loss', 'avg_accuracy', 'total_time'])
 
-  # Add datasets and models to the training process DataFrame
-  transform = torchvision.transforms.Compose([
-      torchvision.transforms.Resize((224, 224)),
-      torchvision.transforms.ToTensor(),
-  ])
-  dataset_path = './datasets/gi4e_raw_eyes'  # Replace with your image directory path
-  model = FeatureExtractor(torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1))
+  # # gi4e_full dataset
+  # # Add triplet models on gi4e_full dataset
+  # triplet_df = pd.concat([triplet_df, pd.DataFrame({
+  #     'dataset_type': ['Gi4eDataset'],
+  #     'dataset_path': ['./datasets/gi4e'],
+  #     'model': [FeatureExtractor(torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1))],
+  #     'transform': [torchvision.transforms.Compose([
+  #         torchvision.transforms.ToPILImage(),
+  #         torchvision.transforms.Resize((224, 224)),
+  #         torchvision.transforms.ToTensor()
+  #     ])]
+  # })], ignore_index=True)
+  # # Add vgg16 models on gi4e_full dataset
+  # triplet_df = pd.concat([triplet_df, pd.DataFrame({
+  #     'dataset_type': ['Gi4eDataset'],
+  #     'dataset_path': ['./datasets/gi4e'],
+  #     'model': [FeatureExtractor(torchvision.models.vgg16(weights=torchvision.models.VGG16_Weights.IMAGENET1K_V1))],
+  #     'transform': [torchvision.transforms.Compose([
+  #         torchvision.transforms.ToPILImage(),
+  #         torchvision.transforms.Resize((224, 224)),
+  #         torchvision.transforms.ToTensor()
+  #     ])]
+  # })], ignore_index=True)
+  # # Add densenet121 models on gi4e_full dataset
+  # triplet_df = pd.concat([triplet_df, pd.DataFrame({
+  #     'dataset_type': ['Gi4eDataset'],
+  #     'dataset_path': ['./datasets/gi4e'],
+  #     'model': [FeatureExtractor(torchvision.models.densenet121(weights=torchvision.models.DenseNet121_Weights.IMAGENET1K_V1))],
+  #     'transform': [torchvision.transforms.Compose([
+  #         torchvision.transforms.ToPILImage(),
+  #         torchvision.transforms.Resize((224, 224)),
+  #         torchvision.transforms.ToTensor()
+  #     ])]
+  # })], ignore_index=True)
+
+  # gi4e_raw_eyes dataset
+  # Add resnet50 models on gi4e_raw_eyes dataset
   triplet_df = pd.concat([triplet_df, pd.DataFrame({
-      'dataset_path': [dataset_path],
-      'model': [model]
+      'dataset_type': ['ImageDataset'],
+      'dataset_path': ['./datasets/gi4e_raw_eyes'],
+      'model': [FeatureExtractor(torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1))],
+      'transform': [torchvision.transforms.Compose([
+          torchvision.transforms.Resize((224, 224)),
+          torchvision.transforms.ToTensor(),
+      ])]
   })], ignore_index=True)
+  # Add vgg16 models on gi4e_raw_eyes dataset
+  triplet_df = pd.concat([triplet_df, pd.DataFrame({
+      'dataset_type': ['ImageDataset'],
+      'dataset_path': ['./datasets/gi4e_raw_eyes'],
+      'model': [FeatureExtractor(torchvision.models.vgg16(weights=torchvision.models.VGG16_Weights.IMAGENET1K_V1))],
+      'transform': [torchvision.transforms.Compose([
+          torchvision.transforms.Resize((224, 224)),
+          torchvision.transforms.ToTensor(),
+      ])]
+  })], ignore_index=True)
+  # # Add densenet121 models on gi4e_raw_eyes dataset
+  # triplet_df = pd.concat([triplet_df, pd.DataFrame({
+  #     'dataset_type': ['ImageDataset'],
+  #     'dataset_path': ['./datasets/gi4e_raw_eyes'],
+  #     'model': [FeatureExtractor(torchvision.models.densenet121(weights=torchvision.models.DenseNet121_Weights.IMAGENET1K_V1))],
+  #     'transform': [torchvision.transforms.Compose([
+  #         torchvision.transforms.Resize((224, 224)),
+  #         torchvision.transforms.ToTensor(),
+  #     ])]
+  # })], ignore_index=True)
 
   # The process of training models following the triplet loss approach the same way as classification
   # loop through datasets and train triplet models
   for index, row in triplet_df.iterrows():
+    transform = row['transform']
+    # Create the triplet dataset
     triplet_dataset = TripletImageDataset(row['dataset_path'], file_extension='png', transform=transform)
-    model = row['model']
+    triplet_model = row['model']
 
     # First, train the triplet model
-    print(f'Training triplet model {model._get_name()} on dataset {triplet_dataset.__class__.__name__}...')
-    trained_model, avg_loss, avg_test_loss = train(triplet_dataset, model, train_process='triplet', k_fold=5, batch_size=64)
-    print(f'Triplet model {model._get_name()} trained on dataset {triplet_dataset.__class__.__name__}.')
+    print(f'Training triplet model {triplet_model._get_name()} on dataset {triplet_dataset.__class__.__name__}...')
+    trained_model, avg_loss, avg_test_loss = train(
+        triplet_dataset, triplet_model, train_process='triplet', k_fold=5, batch_size=32)
+    print(f'Triplet model {triplet_model._get_name()} trained on dataset {triplet_dataset.__class__.__name__}.')
     print(f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}')
 
-    # After training the triplet model, we can also train a classification model based on the same dataset
+    # After training the triplet model, we can also train a classification model based on the same dataset withut moving labels to function
     image_dataset = ImageDataset(row['dataset_path'], file_extension='png', transform=transform)
-    classifier_dataset = EmbeddedDataset(image_dataset, trained_model)
+    classifier_dataset = EmbeddedDataset(image_dataset, trained_model, is_moving_labels_to_function=False)
     classifier_model = Classifier(trained_model)
-    print(f'Training classification model {classifier_model._get_name()} on dataset {classifier_dataset.__class__.__name__}...')
-    trained_classifier_model, avg_loss, avg_test_loss = train(classifier_dataset, classifier_model, train_process='classification', k_fold=5, batch_size=64)
-    print(f'Classification model {classifier_model._get_name()} trained on dataset {classifier_dataset.__class__.__name__}.')
+    print(
+        f'Training classification model {classifier_model._get_name()} on dataset {classifier_dataset.__class__.__name__}...')
+    trained_classifier_model, avg_loss, avg_test_loss = train(
+        classifier_dataset, classifier_model, train_process='classification', k_fold=5, batch_size=32)
+    print(
+        f'Classification model {classifier_model._get_name()} trained on dataset {classifier_dataset.__class__.__name__}.')
     print(f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}')
 
     result_df = pd.concat([result_df, pd.DataFrame({
-        'model': [model._get_name()],
+        'model': [classifier_model._get_name()],
         'dataset': [classifier_dataset._get_name()],
         'avg_loss': [avg_loss],
         'avg_accuracy': [100 * (1 - avg_test_loss)],
         'total_time': [0]  # Placeholder for total time, can be calculated if needed
     })], ignore_index=True)
 
+    # Training the classifier model with moving labels to function: move to labels embeddings
+    classifier_dataset = EmbeddedDataset(image_dataset, trained_model, is_moving_labels_to_function=True)
+    classifier_dataset.apply_function_to_labels_embeddings(lambda x: x)  # Example transformation, can be customized
+    classifier_model = Classifier(trained_model)
+    print(
+        f'Training classification model {classifier_model._get_name()} on dataset {classifier_dataset.__class__.__name__}...')
+    trained_classifier_model, avg_loss, avg_test_loss = train(
+        classifier_dataset, classifier_model, train_process='classification', k_fold=5, batch_size=32)
+    print(
+        f'Classification model {classifier_model._get_name()} trained on dataset {classifier_dataset.__class__.__name__}.')
+    print(f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}')
+
+    result_df = pd.concat([result_df, pd.DataFrame({
+        'model': [classifier_model._get_name()],
+        'dataset': [classifier_dataset._get_name()],
+        'avg_loss': [avg_loss],
+        'avg_accuracy': [100 * (1 - avg_test_loss)],
+        'total_time': [0]  # Placeholder for total time, can be calculated if needed
+    })], ignore_index=True)
+
+
+    # Training the classifier model with moving labels to function: move to labels embeddings x4
+    classifier_dataset = EmbeddedDataset(image_dataset, trained_model, is_moving_labels_to_function=True)
+    classifier_dataset.apply_function_to_labels_embeddings(lambda x: 4*x)  # Example transformation, can be customized
+    classifier_model = Classifier(trained_model)
+    print(
+        f'Training classification model {classifier_model._get_name()} on dataset {classifier_dataset.__class__.__name__}...')
+    trained_classifier_model, avg_loss, avg_test_loss = train(
+        classifier_dataset, classifier_model, train_process='classification', k_fold=5, batch_size=32)
+    print(
+        f'Classification model {classifier_model._get_name()} trained on dataset {classifier_dataset.__class__.__name__}.')
+    print(f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}')
+
+    result_df = pd.concat([result_df, pd.DataFrame({
+        'model': [classifier_model._get_name()],
+        'dataset': [classifier_dataset._get_name()],
+        'avg_loss': [avg_loss],
+        'avg_accuracy': [100 * (1 - avg_test_loss)],
+        'total_time': [0]  # Placeholder for total time, can be calculated if needed
+    })], ignore_index=True)
 
 
   # Save the results to a CSV file

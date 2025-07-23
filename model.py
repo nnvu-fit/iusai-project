@@ -19,6 +19,7 @@ class FeatureExtractor(nn.Module):
     # assuming the input size is 2048 for ResNet50
     if isinstance(backbone, models.ResNet):
       output_size = 2048
+      self.features.append(nn.Flatten())
     elif isinstance(backbone, models.VGG):
       output_size = 25088  # VGG16/19
       self.features.append(nn.Flatten())
