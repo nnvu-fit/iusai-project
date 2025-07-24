@@ -175,7 +175,7 @@ def classification_train_process(dataset, model, k_fold=5, batch_size=64):
 
 def validate_model(model, dataset, batch_size=64):
   """
-  Validate the model on the given dataset and return the average loss.
+  Validate the model on the given dataset and return the average loss and accuracy.
 
   Args:
     model: The model to validate.
@@ -194,16 +194,25 @@ def validate_model(model, dataset, batch_size=64):
   data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
   total_loss = 0.0
+  correct_predictions = 0
+  total_samples = 0
+  
   with torch.no_grad():
     for inputs, labels in data_loader:
       inputs, labels = inputs.to(device), labels.to(device)
       outputs = model(inputs)
       loss = loss_fn(outputs, labels)
       total_loss += loss.item()
+      
+      # Calculate accuracy
+      _, predicted = torch.max(outputs.data, 1)
+      total_samples += labels.size(0)
+      correct_predictions += (predicted == labels).sum().item()
 
   avg_loss = total_loss / len(data_loader)
-  print(f'Validation average loss: {avg_loss}')
-  return avg_loss
+  accuracy = 100.0 * correct_predictions / total_samples
+  print(f'Validation average loss: {avg_loss}, Accuracy: {accuracy:.2f}%')
+  return avg_loss, accuracy
 
 def train(dataset, model, train_process='triplet', k_fold=5, batch_size=64):
   """
@@ -238,7 +247,7 @@ if __name__ == '__main__':
   triplet_df = pd.DataFrame(columns=['dataset_type','dataset_path', 'model', 'transform'])
   classifier_df = pd.DataFrame(columns=['dataset', 'model', 'transform'])
   # DataFrame to store results of the training process
-  result_df = pd.DataFrame(columns=['dataset', 'model', 'avg_loss', 'avg_test_loss', 'avg_val_loss', 'total_time'])
+  result_df = pd.DataFrame(columns=['dataset', 'model', 'avg_loss', 'avg_test_loss', 'avg_val_loss', 'accuracy', 'total_time'])
 
   # # gi4e_full dataset
   # # Add triplet models on gi4e_full dataset
@@ -337,14 +346,15 @@ if __name__ == '__main__':
     print(
         f'Classification model {classifier_model._get_name()} trained on dataset {classifier_dataset.__class__.__name__}.')
     # Validate the model on the test set
-    avg_test_loss = validate_model(trained_classifier_model, test_ds, batch_size=32)
-    print(f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}, Validation average test loss: {avg_test_loss}')
+    avg_val_loss, accuracy = validate_model(trained_classifier_model, test_ds, batch_size=32)
+    print(f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}, Validation average loss: {avg_val_loss}, Accuracy: {accuracy:.2f}%')
 
     result_df = pd.concat([result_df, pd.DataFrame({
         'model': [classifier_model._get_name()],
         'dataset': [classifier_dataset._get_name()],
         'avg_loss': [avg_loss],
-        'avg_test_loss': [100 * (1 - avg_test_loss)],
+        'avg_test_loss': [avg_test_loss],
+        'accuracy': [accuracy],
         'total_time': [0]  # Placeholder for total time, can be calculated if needed
     })], ignore_index=True)
 
@@ -363,15 +373,16 @@ if __name__ == '__main__':
     print(
         f'Classification model {classifier_model._get_name()} trained on dataset {classifier_dataset.__class__.__name__}.')
     # Validate the model on the test set
-    avg_test_loss = validate_model(trained_classifier_model, test_ds, batch_size=32)
-    print(f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}, Validation average test loss: {avg_test_loss}')
+    avg_val_loss, accuracy = validate_model(trained_classifier_model, test_ds, batch_size=32)
+    print(f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}, Validation average loss: {avg_val_loss}, Accuracy: {accuracy:.2f}%')
 
     result_df = pd.concat([result_df, pd.DataFrame({
         'model': [classifier_model._get_name()],
         'dataset': [classifier_dataset._get_name()],
         'avg_loss': [avg_loss],
-        'avg_test_loss': [100 * (1 - avg_test_loss)],
-        'avg_val_loss': [100 * (1 - avg_test_loss)],  # Assuming validation loss is the same as test loss here
+        'avg_test_loss': [avg_test_loss],
+        'avg_val_loss': [avg_val_loss],
+        'accuracy': [accuracy],
         'total_time': [0]  # Placeholder for total time, can be calculated if needed
     })], ignore_index=True)
 
@@ -391,15 +402,16 @@ if __name__ == '__main__':
     print(
         f'Classification model {classifier_model._get_name()} trained on dataset {classifier_dataset.__class__.__name__}.')
     # Validate the model on the test set
-    avg_test_loss = validate_model(trained_classifier_model, test_ds, batch_size=32)
-    print(f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}, Validation average test loss: {avg_test_loss}')
+    avg_val_loss, accuracy = validate_model(trained_classifier_model, test_ds, batch_size=32)
+    print(f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}, Validation average loss: {avg_val_loss}, Accuracy: {accuracy:.2f}%')
 
     result_df = pd.concat([result_df, pd.DataFrame({
         'model': [classifier_model._get_name()],
         'dataset': [classifier_dataset._get_name()],
         'avg_loss': [avg_loss],
-        'avg_test_loss': [100 * (1 - avg_test_loss)],
-        'avg_val_loss': [100 * (1 - avg_test_loss)],  # Assuming validation loss is the same as test loss here
+        'avg_test_loss': [avg_test_loss],
+        'avg_val_loss': [avg_val_loss],
+        'accuracy': [accuracy],
         'total_time': [0]  # Placeholder for total time, can be calculated if needed
     })], ignore_index=True)
 
