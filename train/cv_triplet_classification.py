@@ -173,6 +173,38 @@ def classification_train_process(dataset, model, k_fold=5, batch_size=64):
   return model, sum(loss_list) / len(loss_list), sum(test_loss_list) / len(test_loss_list)
 
 
+def validate_model(model, dataset, batch_size=64):
+  """
+  Validate the model on the given dataset and return the average loss.
+
+  Args:
+    model: The model to validate.
+    dataset: The dataset to validate on.
+    batch_size: The batch size to use for validation.
+  """
+  from trainer import get_device
+  from torch.utils.data import DataLoader
+  import torch
+
+  device = get_device()
+  model = model.to(device)
+  model.eval()
+
+  loss_fn = torch.nn.CrossEntropyLoss()
+  data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+
+  total_loss = 0.0
+  with torch.no_grad():
+    for inputs, labels in data_loader:
+      inputs, labels = inputs.to(device), labels.to(device)
+      outputs = model(inputs)
+      loss = loss_fn(outputs, labels)
+      total_loss += loss.item()
+
+  avg_loss = total_loss / len(data_loader)
+  print(f'Validation average loss: {avg_loss}')
+  return avg_loss
+
 def train(dataset, model, train_process='triplet', k_fold=5, batch_size=64):
   """
   Train the model on the given dataset and return the scored model and average loss.
@@ -198,6 +230,7 @@ def train(dataset, model, train_process='triplet', k_fold=5, batch_size=64):
 
 if __name__ == '__main__':
   import pandas as pd
+  import torch
   import torchvision
   from dataset import ImageDataset, EmbeddedDataset, TripletImageDataset
   from model import FeatureExtractor, Classifier
@@ -205,7 +238,7 @@ if __name__ == '__main__':
   triplet_df = pd.DataFrame(columns=['dataset_type','dataset_path', 'model', 'transform'])
   classifier_df = pd.DataFrame(columns=['dataset', 'model', 'transform'])
   # DataFrame to store results of the training process
-  result_df = pd.DataFrame(columns=['dataset', 'model', 'avg_loss', 'avg_accuracy', 'total_time'])
+  result_df = pd.DataFrame(columns=['dataset', 'model', 'avg_loss', 'avg_test_loss', 'avg_val_loss', 'total_time'])
 
   # # gi4e_full dataset
   # # Add triplet models on gi4e_full dataset
@@ -293,19 +326,25 @@ if __name__ == '__main__':
     image_dataset = ImageDataset(row['dataset_path'], file_extension='png', transform=transform)
     classifier_dataset = EmbeddedDataset(image_dataset, trained_model, is_moving_labels_to_function=False)
     classifier_model = Classifier(trained_model)
+    # Split the dataset into train and validation sets
+    train_size = int(0.8 * len(classifier_dataset))
+    test_size = len(classifier_dataset) - train_size
+    train_ds, test_ds = torch.utils.data.random_split(classifier_dataset, [train_size, test_size])
     print(
         f'Training classification model {classifier_model._get_name()} on dataset {classifier_dataset.__class__.__name__}...')
     trained_classifier_model, avg_loss, avg_test_loss = train(
-        classifier_dataset, classifier_model, train_process='classification', k_fold=5, batch_size=32)
+        train_ds, classifier_model, train_process='classification', k_fold=5, batch_size=32)
     print(
         f'Classification model {classifier_model._get_name()} trained on dataset {classifier_dataset.__class__.__name__}.')
-    print(f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}')
+    # Validate the model on the test set
+    avg_test_loss = validate_model(trained_classifier_model, test_ds, batch_size=32)
+    print(f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}, Validation average test loss: {avg_test_loss}')
 
     result_df = pd.concat([result_df, pd.DataFrame({
         'model': [classifier_model._get_name()],
         'dataset': [classifier_dataset._get_name()],
         'avg_loss': [avg_loss],
-        'avg_accuracy': [100 * (1 - avg_test_loss)],
+        'avg_test_loss': [100 * (1 - avg_test_loss)],
         'total_time': [0]  # Placeholder for total time, can be calculated if needed
     })], ignore_index=True)
 
@@ -313,19 +352,26 @@ if __name__ == '__main__':
     classifier_dataset = EmbeddedDataset(image_dataset, trained_model, is_moving_labels_to_function=True)
     classifier_dataset.apply_function_to_labels_embeddings(lambda x: x)  # Example transformation, can be customized
     classifier_model = Classifier(trained_model)
+    # Split the dataset into train and validation sets
+    train_size = int(0.8 * len(classifier_dataset))
+    test_size = len(classifier_dataset) - train_size
+    train_ds, test_ds = torch.utils.data.random_split(classifier_dataset, [train_size, test_size])
     print(
         f'Training classification model {classifier_model._get_name()} on dataset {classifier_dataset.__class__.__name__}...')
     trained_classifier_model, avg_loss, avg_test_loss = train(
-        classifier_dataset, classifier_model, train_process='classification', k_fold=5, batch_size=32)
+        train_ds, classifier_model, train_process='classification', k_fold=5, batch_size=32)
     print(
         f'Classification model {classifier_model._get_name()} trained on dataset {classifier_dataset.__class__.__name__}.')
-    print(f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}')
+    # Validate the model on the test set
+    avg_test_loss = validate_model(trained_classifier_model, test_ds, batch_size=32)
+    print(f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}, Validation average test loss: {avg_test_loss}')
 
     result_df = pd.concat([result_df, pd.DataFrame({
         'model': [classifier_model._get_name()],
         'dataset': [classifier_dataset._get_name()],
         'avg_loss': [avg_loss],
-        'avg_accuracy': [100 * (1 - avg_test_loss)],
+        'avg_test_loss': [100 * (1 - avg_test_loss)],
+        'avg_val_loss': [100 * (1 - avg_test_loss)],  # Assuming validation loss is the same as test loss here
         'total_time': [0]  # Placeholder for total time, can be calculated if needed
     })], ignore_index=True)
 
@@ -334,19 +380,26 @@ if __name__ == '__main__':
     classifier_dataset = EmbeddedDataset(image_dataset, trained_model, is_moving_labels_to_function=True)
     classifier_dataset.apply_function_to_labels_embeddings(lambda x: 4*x)  # Example transformation, can be customized
     classifier_model = Classifier(trained_model)
+    # Split the dataset into train and validation sets
+    train_size = int(0.8 * len(classifier_dataset))
+    test_size = len(classifier_dataset) - train_size
+    train_ds, test_ds = torch.utils.data.random_split(classifier_dataset, [train_size, test_size])
     print(
         f'Training classification model {classifier_model._get_name()} on dataset {classifier_dataset.__class__.__name__}...')
     trained_classifier_model, avg_loss, avg_test_loss = train(
-        classifier_dataset, classifier_model, train_process='classification', k_fold=5, batch_size=32)
+        train_ds, classifier_model, train_process='classification', k_fold=5, batch_size=32)
     print(
         f'Classification model {classifier_model._get_name()} trained on dataset {classifier_dataset.__class__.__name__}.')
-    print(f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}')
+    # Validate the model on the test set
+    avg_test_loss = validate_model(trained_classifier_model, test_ds, batch_size=32)
+    print(f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}, Validation average test loss: {avg_test_loss}')
 
     result_df = pd.concat([result_df, pd.DataFrame({
         'model': [classifier_model._get_name()],
         'dataset': [classifier_dataset._get_name()],
         'avg_loss': [avg_loss],
-        'avg_accuracy': [100 * (1 - avg_test_loss)],
+        'avg_test_loss': [100 * (1 - avg_test_loss)],
+        'avg_val_loss': [100 * (1 - avg_test_loss)],  # Assuming validation loss is the same as test loss here
         'total_time': [0]  # Placeholder for total time, can be calculated if needed
     })], ignore_index=True)
 
