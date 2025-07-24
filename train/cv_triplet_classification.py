@@ -354,6 +354,7 @@ if __name__ == '__main__':
         'dataset': [classifier_dataset._get_name()],
         'avg_loss': [avg_loss],
         'avg_test_loss': [avg_test_loss],
+        'avg_val_loss': [avg_val_loss],
         'accuracy': [accuracy],
         'total_time': [0]  # Placeholder for total time, can be calculated if needed
     })], ignore_index=True)
