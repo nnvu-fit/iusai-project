@@ -255,83 +255,75 @@ if __name__ == '__main__':
   ])
 
   # gi4e_full dataset
-  # Add triplet models on gi4e_full dataset
+  def create_gi4e_triplet_dataset_fn(): return TripletGi4eDataset(
+      './datasets/gi4e',
+      transform=torchvision.transforms.Compose([
+          torchvision.transforms.ToPILImage(),
+          torchvision.transforms.Resize((224, 224)),
+          torchvision.transforms.ToTensor()
+      ]))
+
+  def create_gi4e_classification_dataset_fn(): return Gi4eDataset(
+      './datasets/gi4e',
+      transform=torchvision.transforms.Compose([
+          torchvision.transforms.ToPILImage(),
+          torchvision.transforms.Resize((224, 224)),
+          torchvision.transforms.ToTensor()
+      ]),
+      is_classification=True)
+
+  # Add resnet50 models on gi4e_full dataset
   triplet_df = pd.concat([triplet_df, pd.DataFrame({
       'model': [FeatureExtractor(torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1))],
-      'dataset_type': ['Gi4eDataset'],
-      'create_triplet_dataset_fn': [
-          lambda: TripletGi4eDataset(
-              './datasets/gi4e',
-              transform=torchvision.transforms.Compose([
-                  torchvision.transforms.ToPILImage(),
-                  torchvision.transforms.Resize((224, 224)),
-                  torchvision.transforms.ToTensor()
-              ]))],
-      'create_classification_dataset_fn': [
-          lambda: Gi4eDataset(
-              './datasets/gi4e',
-              transform=torchvision.transforms.Compose([
-                  torchvision.transforms.ToPILImage(),
-                  torchvision.transforms.Resize((224, 224)),
-                  torchvision.transforms.ToTensor()
-              ]),
-              is_classification=True)],
+      'dataset_type': ['gi4e_full'],
+      'create_triplet_dataset_fn': [create_gi4e_triplet_dataset_fn],
+      'create_classification_dataset_fn': [create_gi4e_classification_dataset_fn],
   })], ignore_index=True)
-  # # Add vgg16 models on gi4e_full dataset
-  # triplet_df = pd.concat([triplet_df, pd.DataFrame({
-  #     'dataset_type': ['Gi4eDataset'],
-  #     'dataset_path': ['./datasets/gi4e'],
-  #     'model': [FeatureExtractor(torchvision.models.vgg16(weights=torchvision.models.VGG16_Weights.IMAGENET1K_V1))],
-  #     'transform': [torchvision.transforms.Compose([
-  #         torchvision.transforms.ToPILImage(),
-  #         torchvision.transforms.Resize((224, 224)),
-  #         torchvision.transforms.ToTensor()
-  #     ])]
-  # })], ignore_index=True)
+  # Add vgg16 models on gi4e_full dataset
+  triplet_df = pd.concat([triplet_df, pd.DataFrame({
+      'model': [FeatureExtractor(torchvision.models.vgg16(weights=torchvision.models.VGG16_Weights.IMAGENET1K_V1))],
+      'dataset_type': ['gi4e_full'],
+      'create_triplet_dataset_fn': [create_gi4e_triplet_dataset_fn],
+      'create_classification_dataset_fn': [create_gi4e_classification_dataset_fn],
+  })], ignore_index=True)
   # # Add densenet121 models on gi4e_full dataset
   # triplet_df = pd.concat([triplet_df, pd.DataFrame({
-  #     'dataset_type': ['Gi4eDataset'],
-  #     'dataset_path': ['./datasets/gi4e'],
   #     'model': [FeatureExtractor(torchvision.models.densenet121(weights=torchvision.models.DenseNet121_Weights.IMAGENET1K_V1))],
-  #     'transform': [torchvision.transforms.Compose([
-  #         torchvision.transforms.ToPILImage(),
-  #         torchvision.transforms.Resize((224, 224)),
-  #         torchvision.transforms.ToTensor()
-  #     ])]
+  #     'dataset_type': ['gi4e_full'],
+  #     'create_triplet_dataset_fn': [create_gi4e_triplet_dataset_fn],
+  #     'create_classification_dataset_fn': [create_gi4e_classification_dataset_fn],
   # })], ignore_index=True)
 
   # gi4e_raw_eyes dataset
+  def create_gi4e_raw_eyes_triplet_dataset_fn(): return TripletImageDataset(
+      './datasets/gi4e_raw_eyes',
+      file_extension='png',
+      transform=torchvision.transforms.Compose([
+          torchvision.transforms.Resize((224, 224)),
+          torchvision.transforms.ToTensor()
+      ]))
+
+  def create_gi4e_raw_eyes_classification_dataset_fn(): return ImageDataset(
+      './datasets/gi4e_raw_eyes',
+      file_extension='png',
+      transform=torchvision.transforms.Compose([
+          torchvision.transforms.Resize((224, 224)),
+          torchvision.transforms.ToTensor()
+      ]))
   # Add resnet50 models on gi4e_raw_eyes dataset
   triplet_df = pd.concat([triplet_df, pd.DataFrame({
       'model': [FeatureExtractor(torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1))],
-      'dataset_type': ['ImageDataset'],
-      'create_triplet_dataset_fn': [
-          lambda: TripletImageDataset(
-              './datasets/gi4e_raw_eyes',
-              file_extension='png',
-              transform=torchvision.transforms.Compose([
-                  torchvision.transforms.Resize((224, 224)),
-                  torchvision.transforms.ToTensor()
-              ]))],
-      'create_classification_dataset_fn': [
-          lambda: ImageDataset(
-              './datasets/gi4e_raw_eyes',
-              file_extension='png',
-              transform=torchvision.transforms.Compose([
-                  torchvision.transforms.Resize((224, 224)),
-                  torchvision.transforms.ToTensor()
-              ]))],
+      'dataset_type': ['gi4e_raw_eyes'],
+      'create_triplet_dataset_fn': [create_gi4e_raw_eyes_triplet_dataset_fn],
+      'create_classification_dataset_fn': [create_gi4e_raw_eyes_classification_dataset_fn],
   })], ignore_index=True)
-  # # Add vgg16 models on gi4e_raw_eyes dataset
-  # triplet_df = pd.concat([triplet_df, pd.DataFrame({
-  #     'dataset_type': ['ImageDataset'],
-  #     'dataset_path': ['./datasets/gi4e_raw_eyes'],
-  #     'model': [FeatureExtractor(torchvision.models.vgg16(weights=torchvision.models.VGG16_Weights.IMAGENET1K_V1))],
-  #     'transform': [torchvision.transforms.Compose([
-  #         torchvision.transforms.Resize((224, 224)),
-  #         torchvision.transforms.ToTensor(),
-  #     ])]
-  # })], ignore_index=True)
+  # Add vgg16 models on gi4e_raw_eyes dataset
+  triplet_df = pd.concat([triplet_df, pd.DataFrame({
+      'model': [FeatureExtractor(torchvision.models.vgg16(weights=torchvision.models.VGG16_Weights.IMAGENET1K_V1))],
+      'dataset_type': ['gi4e_raw_eyes'],
+      'create_triplet_dataset_fn': [create_gi4e_raw_eyes_triplet_dataset_fn],
+      'create_classification_dataset_fn': [create_gi4e_raw_eyes_classification_dataset_fn],
+  })], ignore_index=True)
   # # Add densenet121 models on gi4e_raw_eyes dataset
   # triplet_df = pd.concat([triplet_df, pd.DataFrame({
   #     'dataset_type': ['ImageDataset'],
@@ -347,10 +339,10 @@ if __name__ == '__main__':
   # loop through datasets and train triplet models
   for index, row in triplet_df.iterrows():
     triplet_model = row['model']
-    create_triplet_dataset_fn = row['create_triplet_dataset_fn']
+    create_gi4e_triplet_dataset_fn = row['create_triplet_dataset_fn']
     create_classification_dataset_fn = row['create_classification_dataset_fn']
     # Create the triplet dataset
-    triplet_dataset = create_triplet_dataset_fn()
+    triplet_dataset = create_gi4e_triplet_dataset_fn()
 
     # First, train the triplet model
     print(f'Training triplet model {triplet_model._get_name()} on dataset {triplet_dataset.__class__.__name__}...')
