@@ -671,3 +671,22 @@ class TripletImageDataset(ImageDataset):
       negative_image = self.transform(negative_image)
 
     return anchor_image, positive_image, negative_image
+  
+class TripletGi4eDataset(Gi4eDataset):
+  # override __get_item__ to return triplets
+  def __getitem__(self, index):
+    anchor_image, anchor_target = self.get_image(index)
+    anchor_label = anchor_target['user_number'].item()
+
+    positive_index = random.choice([i for i in range(len(self)) if i != index and self.data[i][1]['user_number'].item() == anchor_label])
+    positive_image, positive_target = self.get_image(positive_index)
+
+    negative_index = random.choice([i for i in range(len(self)) if i != index and self.data[i][1]['user_number'].item() != anchor_label])
+    negative_image, negative_target = self.get_image(negative_index)
+
+    if self.transform:
+      anchor_image = self.transform(anchor_image)
+      positive_image = self.transform(positive_image)
+      negative_image = self.transform(negative_image)
+
+    return anchor_image, positive_image, negative_image

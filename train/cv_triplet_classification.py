@@ -196,14 +196,14 @@ def validate_model(model, dataset, batch_size=64):
   total_loss = 0.0
   correct_predictions = 0
   total_samples = 0
-  
+
   with torch.no_grad():
     for inputs, labels in data_loader:
       inputs, labels = inputs.to(device), labels.to(device)
       outputs = model(inputs)
       loss = loss_fn(outputs, labels)
       total_loss += loss.item()
-      
+
       # Calculate accuracy
       _, predicted = torch.max(outputs.data, 1)
       total_samples += labels.size(0)
@@ -213,6 +213,7 @@ def validate_model(model, dataset, batch_size=64):
   accuracy = correct_predictions / total_samples
   print(f'Validation average loss: {avg_loss}, Accuracy: {accuracy:.2f}%')
   return avg_loss, accuracy
+
 
 def train(dataset, model, train_process='triplet', k_fold=5, batch_size=64):
   """
@@ -241,26 +242,41 @@ if __name__ == '__main__':
   import pandas as pd
   import torch
   import torchvision
-  from dataset import ImageDataset, EmbeddedDataset, TripletImageDataset
+  from dataset import ImageDataset, Gi4eDataset, EmbeddedDataset, TripletImageDataset, TripletGi4eDataset
   from model import FeatureExtractor, Classifier
 
-  triplet_df = pd.DataFrame(columns=['dataset_type','dataset_path', 'model', 'transform'])
+  triplet_df = pd.DataFrame(columns=[
+      'model', 'dataset_type', 'create_triplet_dataset_fn', 'create_classification_dataset_fn'
+  ])
   classifier_df = pd.DataFrame(columns=['dataset', 'model', 'transform'])
   # DataFrame to store results of the training process
-  result_df = pd.DataFrame(columns=['dataset', 'model', 'avg_loss', 'avg_test_loss', 'avg_val_loss', 'accuracy', 'total_time'])
+  result_df = pd.DataFrame(columns=[
+      'dataset', 'model', 'avg_loss', 'avg_test_loss', 'avg_val_loss', 'accuracy', 'total_time'
+  ])
 
-  # # gi4e_full dataset
-  # # Add triplet models on gi4e_full dataset
-  # triplet_df = pd.concat([triplet_df, pd.DataFrame({
-  #     'dataset_type': ['Gi4eDataset'],
-  #     'dataset_path': ['./datasets/gi4e'],
-  #     'model': [FeatureExtractor(torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1))],
-  #     'transform': [torchvision.transforms.Compose([
-  #         torchvision.transforms.ToPILImage(),
-  #         torchvision.transforms.Resize((224, 224)),
-  #         torchvision.transforms.ToTensor()
-  #     ])]
-  # })], ignore_index=True)
+  # gi4e_full dataset
+  # Add triplet models on gi4e_full dataset
+  triplet_df = pd.concat([triplet_df, pd.DataFrame({
+      'model': [FeatureExtractor(torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1))],
+      'dataset_type': ['Gi4eDataset'],
+      'create_triplet_dataset_fn': [
+          lambda: TripletGi4eDataset(
+              './datasets/gi4e',
+              transform=torchvision.transforms.Compose([
+                  torchvision.transforms.ToPILImage(),
+                  torchvision.transforms.Resize((224, 224)),
+                  torchvision.transforms.ToTensor()
+              ]))],
+      'create_classification_dataset_fn': [
+          lambda: Gi4eDataset(
+              './datasets/gi4e',
+              transform=torchvision.transforms.Compose([
+                  torchvision.transforms.ToPILImage(),
+                  torchvision.transforms.Resize((224, 224)),
+                  torchvision.transforms.ToTensor()
+              ]),
+              is_classification=True)],
+  })], ignore_index=True)
   # # Add vgg16 models on gi4e_full dataset
   # triplet_df = pd.concat([triplet_df, pd.DataFrame({
   #     'dataset_type': ['Gi4eDataset'],
@@ -287,24 +303,35 @@ if __name__ == '__main__':
   # gi4e_raw_eyes dataset
   # Add resnet50 models on gi4e_raw_eyes dataset
   triplet_df = pd.concat([triplet_df, pd.DataFrame({
-      'dataset_type': ['ImageDataset'],
-      'dataset_path': ['./datasets/gi4e_raw_eyes'],
       'model': [FeatureExtractor(torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1))],
-      'transform': [torchvision.transforms.Compose([
-          torchvision.transforms.Resize((224, 224)),
-          torchvision.transforms.ToTensor(),
-      ])]
-  })], ignore_index=True)
-  # Add vgg16 models on gi4e_raw_eyes dataset
-  triplet_df = pd.concat([triplet_df, pd.DataFrame({
       'dataset_type': ['ImageDataset'],
-      'dataset_path': ['./datasets/gi4e_raw_eyes'],
-      'model': [FeatureExtractor(torchvision.models.vgg16(weights=torchvision.models.VGG16_Weights.IMAGENET1K_V1))],
-      'transform': [torchvision.transforms.Compose([
-          torchvision.transforms.Resize((224, 224)),
-          torchvision.transforms.ToTensor(),
-      ])]
+      'create_triplet_dataset_fn': [
+          lambda: TripletImageDataset(
+              './datasets/gi4e_raw_eyes',
+              file_extension='png',
+              transform=torchvision.transforms.Compose([
+                  torchvision.transforms.Resize((224, 224)),
+                  torchvision.transforms.ToTensor()
+              ]))],
+      'create_classification_dataset_fn': [
+          lambda: ImageDataset(
+              './datasets/gi4e_raw_eyes',
+              file_extension='png',
+              transform=torchvision.transforms.Compose([
+                  torchvision.transforms.Resize((224, 224)),
+                  torchvision.transforms.ToTensor()
+              ]))],
   })], ignore_index=True)
+  # # Add vgg16 models on gi4e_raw_eyes dataset
+  # triplet_df = pd.concat([triplet_df, pd.DataFrame({
+  #     'dataset_type': ['ImageDataset'],
+  #     'dataset_path': ['./datasets/gi4e_raw_eyes'],
+  #     'model': [FeatureExtractor(torchvision.models.vgg16(weights=torchvision.models.VGG16_Weights.IMAGENET1K_V1))],
+  #     'transform': [torchvision.transforms.Compose([
+  #         torchvision.transforms.Resize((224, 224)),
+  #         torchvision.transforms.ToTensor(),
+  #     ])]
+  # })], ignore_index=True)
   # # Add densenet121 models on gi4e_raw_eyes dataset
   # triplet_df = pd.concat([triplet_df, pd.DataFrame({
   #     'dataset_type': ['ImageDataset'],
@@ -319,10 +346,11 @@ if __name__ == '__main__':
   # The process of training models following the triplet loss approach the same way as classification
   # loop through datasets and train triplet models
   for index, row in triplet_df.iterrows():
-    transform = row['transform']
-    # Create the triplet dataset
-    triplet_dataset = TripletImageDataset(row['dataset_path'], file_extension='png', transform=transform)
     triplet_model = row['model']
+    create_triplet_dataset_fn = row['create_triplet_dataset_fn']
+    create_classification_dataset_fn = row['create_classification_dataset_fn']
+    # Create the triplet dataset
+    triplet_dataset = create_triplet_dataset_fn()
 
     # First, train the triplet model
     print(f'Training triplet model {triplet_model._get_name()} on dataset {triplet_dataset.__class__.__name__}...')
@@ -331,8 +359,8 @@ if __name__ == '__main__':
     print(f'Triplet model {triplet_model._get_name()} trained on dataset {triplet_dataset.__class__.__name__}.')
     print(f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}')
 
-    # After training the triplet model, we can also train a classification model based on the same dataset withut moving labels to function
-    image_dataset = ImageDataset(row['dataset_path'], file_extension='png', transform=transform)
+    # After training the triplet model, we can also train a classification model based on the same dataset without moving labels to function
+    image_dataset = create_classification_dataset_fn()
     classifier_dataset = EmbeddedDataset(image_dataset, trained_model, is_moving_labels_to_function=False)
     classifier_model = Classifier(trained_model)
     # Split the dataset into train and validation sets
@@ -347,7 +375,8 @@ if __name__ == '__main__':
         f'Classification model {classifier_model._get_name()} trained on dataset {classifier_dataset.__class__.__name__}.')
     # Validate the model on the test set
     avg_val_loss, accuracy = validate_model(trained_classifier_model, test_ds, batch_size=32)
-    print(f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}, Validation average loss: {avg_val_loss}, Accuracy: {accuracy:.2f}%')
+    print(
+        f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}, Validation average loss: {avg_val_loss}, Accuracy: {accuracy:.2f}%')
 
     result_df = pd.concat([result_df, pd.DataFrame({
         'model': [classifier_model._get_name()],
@@ -375,7 +404,8 @@ if __name__ == '__main__':
         f'Classification model {classifier_model._get_name()} trained on dataset {classifier_dataset.__class__.__name__}.')
     # Validate the model on the test set
     avg_val_loss, accuracy = validate_model(trained_classifier_model, test_ds, batch_size=32)
-    print(f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}, Validation average loss: {avg_val_loss}, Accuracy: {accuracy:.2f}%')
+    print(
+        f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}, Validation average loss: {avg_val_loss}, Accuracy: {accuracy:.2f}%')
 
     result_df = pd.concat([result_df, pd.DataFrame({
         'model': [classifier_model._get_name()],
@@ -386,7 +416,6 @@ if __name__ == '__main__':
         'accuracy': [accuracy],
         'total_time': [0]  # Placeholder for total time, can be calculated if needed
     })], ignore_index=True)
-
 
     # Training the classifier model with moving labels to function: move to labels embeddings x4
     classifier_dataset = EmbeddedDataset(image_dataset, trained_model, is_moving_labels_to_function=True)
@@ -404,7 +433,8 @@ if __name__ == '__main__':
         f'Classification model {classifier_model._get_name()} trained on dataset {classifier_dataset.__class__.__name__}.')
     # Validate the model on the test set
     avg_val_loss, accuracy = validate_model(trained_classifier_model, test_ds, batch_size=32)
-    print(f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}, Validation average loss: {avg_val_loss}, Accuracy: {accuracy:.2f}%')
+    print(
+        f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}, Validation average loss: {avg_val_loss}, Accuracy: {accuracy:.2f}%')
 
     result_df = pd.concat([result_df, pd.DataFrame({
         'model': [classifier_model._get_name()],
@@ -415,7 +445,6 @@ if __name__ == '__main__':
         'accuracy': [accuracy],
         'total_time': [0]  # Placeholder for total time, can be calculated if needed
     })], ignore_index=True)
-
 
   # Save the results to a CSV file
   result_df.to_csv('triplet_training_results.csv', index=False)
