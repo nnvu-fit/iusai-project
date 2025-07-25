@@ -210,7 +210,7 @@ def validate_model(model, dataset, batch_size=64):
       correct_predictions += (predicted == labels).sum().item()
 
   avg_loss = total_loss / len(data_loader)
-  accuracy = 100.0 * correct_predictions / total_samples
+  accuracy = correct_predictions / total_samples
   print(f'Validation average loss: {avg_loss}, Accuracy: {accuracy:.2f}%')
   return avg_loss, accuracy
 
