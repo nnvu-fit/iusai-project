@@ -367,6 +367,7 @@ if __name__ == '__main__':
 
 
   # The process of training models following the triplet loss approach the same way as classification
+  batch_size = 8
   # loop through datasets and train triplet models
   for index, row in triplet_df.iterrows():
     triplet_model = row['model']
@@ -378,7 +379,7 @@ if __name__ == '__main__':
     # First, train the triplet model
     print(f'Training triplet model {triplet_model._get_name()} on dataset {triplet_dataset.__class__.__name__}...')
     trained_model, avg_loss, avg_test_loss = train(
-        triplet_dataset, triplet_model, train_process='triplet', k_fold=5, batch_size=32)
+        triplet_dataset, triplet_model, train_process='triplet', k_fold=5, batch_size=batch_size)
     print(f'Triplet model {triplet_model._get_name()} trained on dataset {triplet_dataset.__class__.__name__}.')
     print(f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}')
 
@@ -393,11 +394,11 @@ if __name__ == '__main__':
     print(
         f'Training classification model {classifier_model._get_name()} on dataset {classifier_dataset.__class__.__name__}...')
     trained_classifier_model, avg_loss, avg_test_loss = train(
-        train_ds, classifier_model, train_process='classification', k_fold=5, batch_size=32)
+        train_ds, classifier_model, train_process='classification', k_fold=5, batch_size=batch_size)
     print(
         f'Classification model {classifier_model._get_name()} trained on dataset {classifier_dataset.__class__.__name__}.')
     # Validate the model on the test set
-    avg_val_loss, accuracy = validate_model(trained_classifier_model, test_ds, batch_size=32)
+    avg_val_loss, accuracy = validate_model(trained_classifier_model, test_ds, batch_size=batch_size)
     print(
         f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}, Validation average loss: {avg_val_loss}, Accuracy: {accuracy:.2f}%')
 
@@ -422,11 +423,11 @@ if __name__ == '__main__':
     print(
         f'Training classification model {classifier_model._get_name()} on dataset {classifier_dataset.__class__.__name__}...')
     trained_classifier_model, avg_loss, avg_test_loss = train(
-        train_ds, classifier_model, train_process='classification', k_fold=5, batch_size=32)
+        train_ds, classifier_model, train_process='classification', k_fold=5, batch_size=batch_size)
     print(
         f'Classification model {classifier_model._get_name()} trained on dataset {classifier_dataset.__class__.__name__}.')
     # Validate the model on the test set
-    avg_val_loss, accuracy = validate_model(trained_classifier_model, test_ds, batch_size=32)
+    avg_val_loss, accuracy = validate_model(trained_classifier_model, test_ds, batch_size=batch_size)
     print(
         f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}, Validation average loss: {avg_val_loss}, Accuracy: {accuracy:.2f}%')
 
@@ -451,11 +452,11 @@ if __name__ == '__main__':
     print(
         f'Training classification model {classifier_model._get_name()} on dataset {classifier_dataset.__class__.__name__}...')
     trained_classifier_model, avg_loss, avg_test_loss = train(
-        train_ds, classifier_model, train_process='classification', k_fold=5, batch_size=32)
+        train_ds, classifier_model, train_process='classification', k_fold=5, batch_size=batch_size)
     print(
         f'Classification model {classifier_model._get_name()} trained on dataset {classifier_dataset.__class__.__name__}.')
     # Validate the model on the test set
-    avg_val_loss, accuracy = validate_model(trained_classifier_model, test_ds, batch_size=32)
+    avg_val_loss, accuracy = validate_model(trained_classifier_model, test_ds, batch_size=batch_size)
     print(
         f'Average loss: {avg_loss}, Average test loss: {avg_test_loss}, Validation average loss: {avg_val_loss}, Accuracy: {accuracy:.2f}%')
 
