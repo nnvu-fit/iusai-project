@@ -28,6 +28,7 @@ class ImageDataset(Dataset):
     # suffle data
     random.shuffle(self.data)
     self.transform = transform
+    self.labels_list = self.labels()
 
   def __getitem__(self, index):
     x, label = self.get_image(index)
@@ -47,11 +48,17 @@ class ImageDataset(Dataset):
   def label(self, index):
     path_x = self.data[index]
     label_str = path_x.split(os.sep)[-2]
-    label_index = int(re.search(r'\d+', label_str).group())
-    return label_index
+    return self.label_to_index[label_str]
 
   def labels(self):
-    return sorted(set([path_x.split(os.sep)[-2] for path_x in self.data]))
+    labels = set([path_x.split(os.sep)[-2] for path_x in self.data])
+    
+    # create a dictionary to map labels to indices
+    label_to_index = {label: i for i, label in enumerate(sorted(labels))}
+    self.label_to_index = label_to_index
+    self.index_to_label = {i: label for label, i in label_to_index.items()}
+
+    return sorted(labels)
 
 
 class EyesDataset(Dataset):
