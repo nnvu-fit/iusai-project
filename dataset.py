@@ -421,8 +421,8 @@ class YoutubeFacesWithFacialKeypoints(Dataset):
       image = self.transform(image)
 
     # get left_eye_points, right_eye_points from landmarks_2d
-    left_eye_points = target['landmarks_2d'][YoutubeFacesWithFacialKeypoints.leftEyePoints[0]                                             :YoutubeFacesWithFacialKeypoints.leftEyePoints[1]]
-    right_eye_points = target['landmarks_2d'][YoutubeFacesWithFacialKeypoints.rightEyePoints[0]                                              :YoutubeFacesWithFacialKeypoints.rightEyePoints[1]]
+    left_eye_points = target['landmarks_2d'][YoutubeFacesWithFacialKeypoints.leftEyePoints[0]:YoutubeFacesWithFacialKeypoints.leftEyePoints[1]]
+    right_eye_points = target['landmarks_2d'][YoutubeFacesWithFacialKeypoints.rightEyePoints[0]:YoutubeFacesWithFacialKeypoints.rightEyePoints[1]]
     # from the eye points, it's geometric center of the eye
     left_eye_center = np.mean(left_eye_points, axis=0)
     right_eye_center = np.mean(right_eye_points, axis=0)
@@ -700,21 +700,21 @@ class TripletGi4eDataset(Gi4eDataset):
   
 class TripletYoutubeFacesDataset(YoutubeFacesWithFacialKeypoints):
 
-  # override __init__ to set is_classification to False
+  # override __init__ to set is_classification to True
   def __init__(self, data_path, transform=None, number_of_samples=None):
-    super().__init__(data_path, is_classification=False, transform=transform, number_of_samples=number_of_samples)
+    super().__init__(data_path, is_classification=True, transform=transform, number_of_samples=number_of_samples)
     # set is_classification to False
-    self.is_classification = False
+    self.is_classification = True
 
   # override __get_item__ to return triplets
   def __getitem__(self, index):
-    anchor_image, anchor_target = self.get_image(index, include_target=True)
-    anchor_label = anchor_target['label'].item()
+    anchor_image, target = self.get_image(index, include_target=True)
+    anchor_label = target['label']
 
-    positive_index = random.choice([i for i in range(len(self)) if i != index and self.data[i][1]['label'].item() == anchor_label])
+    positive_index = random.choice([i for i in range(len(self)) if i != index and self.data[i][1]['label'] == anchor_label])
     positive_image, positive_target = self.get_image(positive_index, include_target=True)
 
-    negative_index = random.choice([i for i in range(len(self)) if i != index and self.data[i][1]['label'].item() != anchor_label])
+    negative_index = random.choice([i for i in range(len(self)) if i != index and self.data[i][1]['label'] != anchor_label])
     negative_image, negative_target = self.get_image(negative_index, include_target=True)
 
     if self.transform:

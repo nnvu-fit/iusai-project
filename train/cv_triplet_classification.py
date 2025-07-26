@@ -337,8 +337,9 @@ if __name__ == '__main__':
 
   # Youtube Faces dataset
   def create_youtube_faces_triplet_dataset_fn(): return ds.TripletYoutubeFacesDataset(
-      './datasets/YouTubeFacesWithFacialKeypoints',
+      data_path='./datasets/YouTubeFacesWithFacialKeypoints',
       transform=torchvision.transforms.Compose([
+          torchvision.transforms.ToPILImage(),
           torchvision.transforms.Resize((224, 224)),
           torchvision.transforms.ToTensor()
       ]),
@@ -346,12 +347,14 @@ if __name__ == '__main__':
   )
 
   def create_youtube_faces_classification_dataset_fn(): return ds.YoutubeFacesWithFacialKeypoints(
-      './datasets/YouTubeFacesWithFacialKeypoints',
+      data_path='./datasets/YouTubeFacesWithFacialKeypoints',
       transform=torchvision.transforms.Compose([
+          torchvision.transforms.ToPILImage(),
           torchvision.transforms.Resize((224, 224)),
           torchvision.transforms.ToTensor()
       ]),
       number_of_samples=10,  # Limit the number of samples for faster training
+      is_classification=True
   )
   # Add resnet50 models on youtube_faces dataset
   triplet_df = pd.concat([triplet_df, pd.DataFrame({
