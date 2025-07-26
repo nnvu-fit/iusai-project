@@ -697,3 +697,29 @@ class TripletGi4eDataset(Gi4eDataset):
       negative_image = self.transform(negative_image)
 
     return anchor_image, positive_image, negative_image
+  
+class TripletYoutubeFacesDataset(YoutubeFacesWithFacialKeypoints):
+
+  # override __init__ to set is_classification to False
+  def __init__(self, data_path, transform=None, number_of_samples=None):
+    super().__init__(data_path, is_classification=False, transform=transform, number_of_samples=number_of_samples)
+    # set is_classification to False
+    self.is_classification = False
+
+  # override __get_item__ to return triplets
+  def __getitem__(self, index):
+    anchor_image, anchor_target = self.get_image(index, include_target=True)
+    anchor_label = anchor_target['label'].item()
+
+    positive_index = random.choice([i for i in range(len(self)) if i != index and self.data[i][1]['label'].item() == anchor_label])
+    positive_image, positive_target = self.get_image(positive_index, include_target=True)
+
+    negative_index = random.choice([i for i in range(len(self)) if i != index and self.data[i][1]['label'].item() != anchor_label])
+    negative_image, negative_target = self.get_image(negative_index, include_target=True)
+
+    if self.transform:
+      anchor_image = self.transform(anchor_image)
+      positive_image = self.transform(positive_image)
+      negative_image = self.transform(negative_image)
+
+    return anchor_image, positive_image, negative_image

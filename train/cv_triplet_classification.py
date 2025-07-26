@@ -242,7 +242,7 @@ if __name__ == '__main__':
   import pandas as pd
   import torch
   import torchvision
-  from dataset import ImageDataset, Gi4eDataset, EmbeddedDataset, TripletImageDataset, TripletGi4eDataset
+  import dataset as ds
   from model import FeatureExtractor, Classifier
 
   triplet_df = pd.DataFrame(columns=[
@@ -336,20 +336,23 @@ if __name__ == '__main__':
   # })], ignore_index=True)
 
   # Youtube Faces dataset
-  def create_youtube_faces_triplet_dataset_fn(): return TripletImageDataset(
+  def create_youtube_faces_triplet_dataset_fn(): return ds.TripletYoutubeFacesDataset(
       './datasets/YouTubeFacesWithFacialKeypoints',
-      file_extension='jpg',
       transform=torchvision.transforms.Compose([
           torchvision.transforms.Resize((224, 224)),
           torchvision.transforms.ToTensor()
-      ]))
-  def create_youtube_faces_classification_dataset_fn(): return ImageDataset(
+      ]),
+      number_of_samples=10,  # Limit the number of samples for faster training
+  )
+
+  def create_youtube_faces_classification_dataset_fn(): return ds.YoutubeFacesWithFacialKeypoints(
       './datasets/YouTubeFacesWithFacialKeypoints',
-      file_extension='jpg',
       transform=torchvision.transforms.Compose([
           torchvision.transforms.Resize((224, 224)),
           torchvision.transforms.ToTensor()
-      ]))
+      ]),
+      number_of_samples=10,  # Limit the number of samples for faster training
+  )
   # Add resnet50 models on youtube_faces dataset
   triplet_df = pd.concat([triplet_df, pd.DataFrame({
       'model': [FeatureExtractor(torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1))],
@@ -365,9 +368,8 @@ if __name__ == '__main__':
       'create_classification_dataset_fn': [create_youtube_faces_classification_dataset_fn],
   })], ignore_index=True)
 
-
   # The process of training models following the triplet loss approach the same way as classification
-  batch_size = 8
+  batch_size = 32
   # loop through datasets and train triplet models
   for index, row in triplet_df.iterrows():
     triplet_model = row['model']
@@ -385,7 +387,7 @@ if __name__ == '__main__':
 
     # After training the triplet model, we can also train a classification model based on the same dataset without moving labels to function
     image_dataset = create_classification_dataset_fn()
-    classifier_dataset = EmbeddedDataset(image_dataset, trained_model, is_moving_labels_to_function=False)
+    classifier_dataset = ds.EmbeddedDataset(image_dataset, trained_model, is_moving_labels_to_function=False)
     classifier_model = Classifier(trained_model)
     # Split the dataset into train and validation sets
     train_size = int(0.8 * len(classifier_dataset))
@@ -413,7 +415,7 @@ if __name__ == '__main__':
     })], ignore_index=True)
 
     # Training the classifier model with moving labels to function: move to labels embeddings
-    classifier_dataset = EmbeddedDataset(image_dataset, trained_model, is_moving_labels_to_function=True)
+    classifier_dataset = ds.EmbeddedDataset(image_dataset, trained_model, is_moving_labels_to_function=True)
     classifier_dataset.apply_function_to_labels_embeddings(lambda x: x)  # Example transformation, can be customized
     classifier_model = Classifier(trained_model)
     # Split the dataset into train and validation sets
@@ -442,7 +444,7 @@ if __name__ == '__main__':
     })], ignore_index=True)
 
     # Training the classifier model with moving labels to function: move to labels embeddings x4
-    classifier_dataset = EmbeddedDataset(image_dataset, trained_model, is_moving_labels_to_function=True)
+    classifier_dataset = ds.EmbeddedDataset(image_dataset, trained_model, is_moving_labels_to_function=True)
     classifier_dataset.apply_function_to_labels_embeddings(lambda x: 4*x)  # Example transformation, can be customized
     classifier_model = Classifier(trained_model)
     # Split the dataset into train and validation sets
