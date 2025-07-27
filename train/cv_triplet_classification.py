@@ -390,8 +390,8 @@ if __name__ == '__main__':
   })], ignore_index=True)
   # Add vgg16 models on youtube_faces dataset
   triplet_df = pd.concat([triplet_df, pd.DataFrame({
-      'backbone_model': [torchvision.models.vgg16(weights=torchvision.models.VGG16_Weights.IMAGENET1K_V1)],
-      'feature_extractor_model': [FeatureExtractor(torchvision.models.vgg16(weights=torchvision.models.VGG16_Weights.IMAGENET1K_V1))],
+      'backbone_model': [torchvision.models.vgg16(weights=None)],
+      'feature_extractor_model': [FeatureExtractor(torchvision.models.vgg16(weights=None))],
       'dataset_type': ['youtube_faces'],
       'create_triplet_dataset_fn': [create_youtube_faces_triplet_dataset_fn],
       'create_classification_dataset_fn': [create_youtube_faces_classification_dataset_fn],

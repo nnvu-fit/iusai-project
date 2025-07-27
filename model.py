@@ -25,6 +25,9 @@ class FeatureExtractor(nn.Module):
       self.features.append(nn.Flatten())
     elif isinstance(backbone, models.MobileNetV2):
       output_size = 1280  # MobileNetV2
+      self.features.append(nn.AdaptiveAvgPool2d((1, 1)))
+      self.features.append(nn.Flatten())
+      self.features.append(nn.Dropout(p=0.2))
     elif isinstance(backbone, models.DenseNet):
       output_size = 1024  # DenseNet121
       self.features.append(nn.ReLU(inplace=True))
