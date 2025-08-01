@@ -400,7 +400,7 @@ class YoutubeFacesWithFacialKeypoints(Dataset):
     # read the annotations from the label files
     # check if the labels and data paths are the same
     for index, annotation in enumerate(annotations):
-      if index % 1000 == 0:
+      if index % 1000 == 0 or index == len(annotations) - 1:
         print('annotation: ', index+1, '/', len(annotations), ' - ', annotation['image_id'], ' - ', annotation['label'])
       self.find_data_path_for_annotation(annotation, data_paths)
     if len(annotations) % 1000 != 0:
@@ -466,7 +466,8 @@ class YoutubeFacesWithFacialKeypoints(Dataset):
     label_file_count = len(label_files)
     # read the labels from the label files
     for index, label_file in enumerate(label_files):
-      print(index+1, '/', label_file_count, '- label_file: ', label_file)
+      if index % 1000 == 0 or index == label_file_count - 1:
+        print(index+1, '/', label_file_count, '- label_file: ', label_file)
       # read the labels from the label file
       with open(label_file, 'r') as f:
         annotations.extend(json.load(f))
