@@ -131,6 +131,13 @@ def triplet_train_process(dataset, model, k_fold=5, batch_size=64):
       loss_list.append(avg_loss)
       test_loss_list.append(avg_test_loss)
     print(f'Fold {fold + 1} completed.')
+
+    # save the model after each fold
+    model_dir = f'models/triplet/{model.__get_name__()}'
+    if not os.path.exists(model_dir):
+      os.makedirs(model_dir)
+    torch.save(model.state_dict(), f'{model_dir}/model_fold_{fold + 1}.pth')
+
   # Print the average loss over all folds
   average_loss = sum(loss_list) / len(loss_list)
   average_test_loss = sum(test_loss_list) / len(test_loss_list)
@@ -219,6 +226,12 @@ def classification_train_process(dataset, model, k_fold=5, batch_size=64, test_d
       loss_list.append(avg_loss)
       val_loss_list.append(avg_val_loss)
     print(f'Fold {fold + 1} completed.')
+
+    # save the model after each fold
+    model_dir = f'models/triplet/{model.__get_name__()}'
+    if not os.path.exists(model_dir):
+      os.makedirs(model_dir)
+    torch.save(model.state_dict(), f'{model_dir}/model_fold_{fold + 1}.pth')
 
     # Validate the model on the test set each fold if provided
     if test_dataset is not None:
