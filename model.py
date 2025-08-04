@@ -54,6 +54,7 @@ class Classifier(FeatureExtractor):
     if not isinstance(backbone, FeatureExtractor):
       raise ValueError("backbone must be an instance of FeatureExtractor")
     self.backbone = backbone
+    self.backbone_out_features = backbone.out_features
 
     # get the last layer from the backbone
     self.fc = nn.Linear(backbone.out_features, output_size)  # Assuming binary classification
