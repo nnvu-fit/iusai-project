@@ -77,9 +77,9 @@ def validate_model(model, dataset, batch_size=64):
   # Calculate average loss and accuracy
   avg_loss = total_loss / len(data_loader)
   # accuracy = (correct_predictions / total_samples) * 100
-  precision = precision_score(y_true, y_pred, average='weighted')
-  recall = recall_score(y_true, y_pred, average='weighted')
-  f1 = f1_score(y_true, y_pred, average='weighted')
+  precision = precision_score(y_true, y_pred, average='weighted', zero_division=0)
+  recall = recall_score(y_true, y_pred, average='weighted', zero_division=0)
+  f1 = f1_score(y_true, y_pred, average='weighted', zero_division=0)
   accuracy = accuracy_score(y_true, y_pred)
   # Print the validation results
   print(
@@ -119,36 +119,41 @@ def semantic_validate_model(model, validate_dataset, knowledge_dataset, label_to
   y_pred = []
 
   with torch.no_grad():
-    # Store all individual embeddings from knowledge dataset (already embeddings)
-    knowledge_embeddings = []  # List of (embedding, label_str) tuples
+    # # Store all individual embeddings from knowledge dataset (already embeddings)
+    # knowledge_embeddings = []  # List of (embedding, label_str) tuples
 
-    # Extract embeddings from knowledge dataset (they are already embeddings)
-    for k_embeddings, k_labels in knowledge_dataloader:
-      k_embeddings, k_labels = k_embeddings.to(device), k_labels.to(device)
+    # # Extract embeddings from knowledge dataset (they are already embeddings)
+    # for k_embeddings, k_labels in knowledge_dataloader:
+    #   k_embeddings, k_labels = k_embeddings.to(device), k_labels.to(device)
 
-      # Store each individual embedding with its label
-      for embedding, label in zip(k_embeddings, k_labels):
-        label_str = str(label.item())
-        knowledge_embeddings.append((embedding, label_str))
+    #   # Store each individual embedding with its label
+    #   for embedding, label in zip(k_embeddings, k_labels):
+    #     label_str = str(label.item())
+    #     knowledge_embeddings.append((embedding, label_str))
 
     # Now validate on the validation dataset (already embeddings)
     for val_embeddings, labels in validate_dataloader:
       val_embeddings, labels = val_embeddings.to(device), labels.to(device)
 
-      # Find nearest individual embedding for each validation embedding
-      for index in range(len(val_embeddings)):
-        min_distance, nearest_label = torch.inf, None
+      # # Find nearest individual embedding for each validation embedding
+      # for index in range(len(val_embeddings)):
+      #   min_distance, nearest_label = torch.inf, None
 
-        # Compare with each individual embedding in knowledge base
-        for k_embedding, k_label_str in knowledge_embeddings:
-          distance = torch.norm(val_embeddings[index] - k_embedding)
-          if distance < min_distance:
-            min_distance = distance
-            nearest_label = k_label_str
+      #   # Compare with each individual embedding in knowledge base
+      #   for k_embedding, k_label_str in knowledge_embeddings:
+      #     distance = torch.norm(val_embeddings[index] - k_embedding)
+      #     if distance < min_distance:
+      #       min_distance = distance
+      #       nearest_label = k_label_str
 
-        # Apply semantic transformation: subtract the label embedding of nearest cluster
-        if nearest_label in label_to_embeddings:
-          val_embeddings[index] = val_embeddings[index] - label_to_embeddings[nearest_label].detach().to(device)
+      #   # Apply semantic transformation: subtract the label embedding of nearest cluster
+      #   if nearest_label in label_to_embeddings:
+      #     val_embeddings[index] = val_embeddings[index] - label_to_embeddings[nearest_label].detach().to(device)
+
+      # Calculate the label embeddings for the current batch
+      label_embeddings = torch.stack([label_to_embeddings[str(label.item())].detach().to(device) for label in labels])
+      # Subtract the label embeddings from the inputs
+      val_embeddings = val_embeddings - label_embeddings
 
       # Use the transformed embeddings for final classification
       outputs = model(val_embeddings)  # For Classifier models
@@ -219,6 +224,41 @@ def compute_label_embeddings(labels, out_features):
   return label_to_embedding
 
 
+def get_n_most_informative_samples(dataset, model, n=2):
+  """
+  Get the n most informative samples from the dataset using the model.
+  Args:
+    dataset: The dataset to get samples from.
+    model: The model to use for getting the samples.
+    n: The number of samples to return.
+  """
+  from torch.utils.data import DataLoader
+  import torch
+  from sklearn.metrics import pairwise_distances
+  from trainer import get_device
+
+  device = get_device()
+  # Create a data loader for the dataset
+  dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+
+  # Get the embeddings for all samples in the dataset
+  model.eval()
+  with torch.no_grad():
+    all_embeddings = []
+    for batch in dataloader:
+      inputs = batch[0].to(device)
+      outputs = model(inputs)
+      all_embeddings.append(outputs.cpu())
+    all_embeddings = torch.cat(all_embeddings)
+
+  # Compute pairwise distances between all embeddings
+  distances = pairwise_distances(all_embeddings)
+
+  # Get the indices of the n most informative samples
+  informative_indices = distances.sum(axis=1).argsort()[:n]
+  return informative_indices
+
+
 def triplet_train_process(dataset, model, k_fold=5, batch_size=64):
   """
   Train the model on the given dataset and return the scored model and average loss.
@@ -230,23 +270,24 @@ def triplet_train_process(dataset, model, k_fold=5, batch_size=64):
 
   device = get_device()
 
+  # split dataset using k-fold cross-validation
+  dataset_size = len(dataset)
+  fold_size = dataset_size // k_fold
+
   for fold in range(k_fold):
     print(f'Running fold {fold + 1}/{k_fold}...')
 
     # Initialize the trainer
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-
     loss_fn = torch.nn.TripletMarginLoss(margin=0.2, p=2)
 
-    # Split dataset into train and test
-    train_size = int(0.8 * len(dataset))
-    test_size = len(dataset) - train_size
-    train_ds, test_ds = torch.utils.data.random_split(
-        dataset, [train_size, test_size])
-
+    # Split dataset into train and validation sets
+    train_dataset = torch.utils.data.Subset(dataset, list(
+        range(fold_size * fold)) + list(range(fold_size * (fold + 1), dataset_size)))
+    val_dataset = torch.utils.data.Subset(dataset, range(fold_size * fold, fold_size * (fold + 1)))
     # Create data loaders
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
     # Train the model
     epochs = 10
@@ -281,7 +322,7 @@ def triplet_train_process(dataset, model, k_fold=5, batch_size=64):
       model.eval()
       total_test_loss = 0.0
       with torch.no_grad():
-        for batch in test_loader:
+        for batch in val_loader:
           anchor, positive, negative = batch
           anchor, positive, negative = anchor.to(
               device), positive.to(device), negative.to(device)
@@ -295,7 +336,7 @@ def triplet_train_process(dataset, model, k_fold=5, batch_size=64):
 
       # Calculate average loss for the epoch
       avg_loss = total_loss / len(train_loader)
-      avg_test_loss = total_test_loss / len(test_loader)
+      avg_test_loss = total_test_loss / len(val_loader)
       print(
           f'Fold {fold + 1}: Average loss: {avg_loss}, Average test loss: {avg_test_loss}')
       print(
@@ -318,6 +359,67 @@ def triplet_train_process(dataset, model, k_fold=5, batch_size=64):
   return model, average_loss, average_test_loss
 
 
+def AL_RL_semantic_classification_train_process(dataset, model, semantic_embedding_fn, k_fold=5, batch_size=64, test_dataset=None):
+  """ Train the model on the given dataset and return the scored model and average loss.
+  This function is a placeholder for a specific training process that might involve moving labels to function.
+  """
+  from trainer import get_device
+  from torch.utils.data import DataLoader
+  import time
+  import torch
+  import pandas as pd
+
+  device = get_device()
+  # create result df
+  result_df = pd.DataFrame(columns=['dataset', 'model', 'fold', 'avg_loss', 'avg_test_loss',
+                                    'avg_val_loss', 'precision', 'recall', 'f1', 'accuracy'])
+  # load results from file if exists
+  if os.path.exists(f'results/cv-triplet/{current_dataset}_{current_backbone_model._get_name()}_{time.strftime("%Y%m%d-%H%M%S")}.csv'):
+    result_df = pd.read_csv(
+        f'results/cv-triplet/{current_dataset}_{current_backbone_model._get_name()}_{time.strftime("%Y%m%d-%H%M%S")}.csv')
+  # compute label embeddings
+  print('Computing label embeddings...')
+  label_to_embedding = compute_label_embeddings(dataset.labels, model.backbone_out_features)
+  if not semantic_embedding_fn:
+    # Default to zero if no function is provided, it means no semantic embeddings are used
+    def semantic_embedding_fn(x): return 0
+  label_to_embedding = {label: semantic_embedding_fn(
+      index) * embedding for index, (label, embedding) in enumerate(label_to_embedding.items())}
+  print('Label embeddings computed.')
+  # split dataset using k-fold cross-validation
+  dataset_size = len(dataset)
+  fold_size = dataset_size // k_fold
+  for fold in range(k_fold):
+    print(f'Running fold {fold + 1}/{k_fold}...')
+    fold_start_time = time.time()
+    # Do the same process as classification_train_process but with semantic embeddings
+    semantic_embeddings = label_to_embedding
+    # Initialize the trainer
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    loss_fn = torch.nn.CrossEntropyLoss()
+    # Split dataset into train and validation sets
+    train_dataset = torch.utils.data.Subset(dataset, list(range(fold * fold_size, (fold + 1) * fold_size)))
+    val_dataset = torch.utils.data.Subset(dataset, list(range((fold + 1) * fold_size, dataset_size)))
+    # Create data loaders
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+    # Add active learning here
+    # Placeholder for active learning logic, e.g., selecting samples based on uncertainty or diversity
+
+    # Training loop
+    for epoch in range(10):  # Placeholder for number of epochs
+      model.train()
+      for batch in train_loader:
+        optimizer.zero_grad()
+        outputs = model(batch['input_ids'], batch['attention_mask'], semantic_embeddings)
+        loss = loss_fn(outputs, batch['labels'])
+        loss.backward()
+        optimizer.step()
+    print(f'Fold {fold + 1} completed in {time.time() - fold_start_time:.2f} seconds.')
+    # Validate the model on the test set each fold if provided
+
+
 def semantic_classification_train_process(dataset, model, semantic_embedding_fn, k_fold=5, batch_size=64, test_dataset=None):
   """ Train the model on the given dataset and return the scored model and average loss.
   This function is a placeholder for a specific training process that might involve moving labels to function.
@@ -333,6 +435,11 @@ def semantic_classification_train_process(dataset, model, semantic_embedding_fn,
   # create result df
   result_df = pd.DataFrame(columns=['dataset', 'model', 'fold', 'avg_loss', 'avg_test_loss',
                            'avg_val_loss', 'precision', 'recall', 'f1', 'accuracy'])
+  # load results from file if exists
+  # f'{result_dir}/{current_dataset}_{current_backbone_model._get_name()}_{time.strftime("%Y%m%d-%H%M%S")}.csv'
+  if os.path.exists(f'results/cv-triplet/{current_dataset}_{current_backbone_model._get_name()}_{time.strftime("%Y%m%d-%H%M%S")}.csv'):
+    result_df = pd.read_csv(
+        f'results/cv-triplet/{current_dataset}_{current_backbone_model._get_name()}_{time.strftime("%Y%m%d-%H%M%S")}.csv')
 
   # compute label embeddings
   print('Computing label embeddings...')
@@ -349,6 +456,21 @@ def semantic_classification_train_process(dataset, model, semantic_embedding_fn,
   fold_size = dataset_size // k_fold
 
   for fold in range(k_fold):
+    # # Check if fold already exists in results
+    # is_fold_trained = True
+    # if fold in result_df['fold'].values:
+    #   print(f'Fold {fold + 1} already exists in results.')
+    #   # try loading the model
+    #   model_path = f'models/classification/{current_dataset}_{model._get_name()}/model_fold_{fold + 1}.pth'
+    #   if os.path.exists(model_path):
+    #     model.load_state_dict(torch.load(model_path))
+    #     print(f'Model loaded from {model_path}')
+    #   else:
+    #     # If the model does not exist, retrain the fold
+    #     is_fold_trained = False
+
+    # if is_fold_trained:
+    #   pass
     print(f'Running fold {fold + 1}/{k_fold}...')
     fold_start_time = time.time()
 
@@ -382,7 +504,7 @@ def semantic_classification_train_process(dataset, model, semantic_embedding_fn,
         # move input embeddings to semantic embeddings
         label_embeddings = torch.stack([semantic_embeddings[str(label.item())].detach() for label in labels])
         # subtract the label embeddings from the inputs
-        inputs = inputs - label_embeddings
+        inputs = inputs - label_embeddings.to(device)
         inputs, labels = inputs.to(device), labels.to(device)
 
         optimizer.zero_grad()
@@ -397,7 +519,7 @@ def semantic_classification_train_process(dataset, model, semantic_embedding_fn,
 
       # loop through validation set to evaluate
       avg_loss = total_loss / len(train_loader)
-      avg_val_loss, val_accuracy, val_precision, val_recall, val_f1 = validate_model(
+      avg_val_loss, val_accuracy, val_precision, val_recall, val_f1 = semantic_validate_model(
           model, val_dataset, train_dataset, label_to_embedding, batch_size=batch_size)
       print(f'Fold {fold + 1}, Epoch {epoch + 1}: Average loss: {avg_loss}, Validation loss: {avg_val_loss}, Validation accuracy: {val_accuracy:.2f}%, Time taken: {epoch_end_time - epoch_start_time:.2f} seconds')
       loss_list.append(avg_loss)
@@ -410,7 +532,7 @@ def semantic_classification_train_process(dataset, model, semantic_embedding_fn,
     save_model(f'{model_dir}/model_fold_{fold + 1}.pth', model)
     # Validate the model on the test set each fold if provided
     if test_dataset is not None:
-      avg_test_loss, accuracy, precision, recall, f1 = validate_model(
+      avg_test_loss, accuracy, precision, recall, f1 = semantic_validate_model(
           model, test_dataset, train_dataset, label_to_embedding, batch_size=batch_size)
       print(f'Fold {fold + 1}: Average test loss: {avg_test_loss}, Test accuracy: {accuracy:.2f}%, Test precision: {precision:.2f}%, Test recall: {recall:.2f}%, Test F1 Score: {f1:.2f}%')
       result_df = pd.concat([result_df, pd.DataFrame({
@@ -609,10 +731,19 @@ def create_training_process_df(
         create_triplet_dataset_fn,
         create_classification_dataset_fn,
         create_classification_test_dataset_fn=None,
-        models: list[str] = ['resnet', 'vgg', 'mobilenet', 'densenet'],
+        models: list[str] = ['resnet'],
         batch_size=32):
   """
   Create a DataFrame to store the training process information.
+  Args:
+    dataset_type: The type of dataset to use (e.g., 'cifar10', 'mnist').
+    create_triplet_dataset_fn: Function to create the triplet dataset.
+    create_classification_dataset_fn: Function to create the classification dataset.
+    create_classification_test_dataset_fn: Function to create the classification test dataset (optional).
+    models: List of model names to include in the DataFrame (e.g., ['resnet', 'vgg', 'mobilenet', 'densenet']).
+    batch_size: The batch size to use for training.
+  Returns:
+    A DataFrame containing the training process information.
   """
   import pandas as pd
   import torchvision
@@ -740,6 +871,17 @@ def train_and_evaluate(model, train_data, test_data, process_type, semantic_fn=N
     print(f'Loading pre-trained model for {description} model {model._get_name()}...')
     trained_model = model
     avg_loss, avg_val_loss, label_embedding = 0.0, 0.0, None
+    # calculate label_embedding if process_type is semantic_classification
+    if process_type == 'semantic_classification':
+      label_embedding = compute_label_embeddings(
+          train_data.labels, trained_model.backbone_out_features)
+      print(f'Label embeddings computed for {description} model.')
+      if not semantic_fn:
+        # Default to zero if no function is provided, it means no semantic embeddings are used
+        def semantic_fn(x): return 0
+      label_embedding = {
+          label: semantic_fn(index) * embedding for index, (label, embedding) in enumerate(label_embedding.items())
+      }
 
   # Validate model on test set, except for triplet models
   if process_type == 'triplet':
@@ -752,7 +894,7 @@ def train_and_evaluate(model, train_data, test_data, process_type, semantic_fn=N
           f'Recall: {recall:.2f}%, F1 Score: {f1:.2f}%')
   elif process_type == 'semantic_classification':
     avg_test_loss, accuracy, precision, recall, f1 = semantic_validate_model(
-        trained_model, test_data, train_data, label_embedding, batch_size=batch_size)
+        trained_model, test_data, train_data, label_to_embeddings=label_embedding, batch_size=batch_size)
     print(f'Results: Loss: {avg_loss:.4f}, Val Loss: {avg_val_loss:.4f}, '
           f'Test Loss: {avg_test_loss:.4f}, Accuracy: {accuracy:.2f}%, Precision: {precision:.2f}%, '
           f'Recall: {recall:.2f}%, F1 Score: {f1:.2f}%')
@@ -932,28 +1074,30 @@ if __name__ == '__main__':
 
   # FER2013 dataset
   def create_fer2013_triplet_dataset_fn(): return ds.TripletImageDataset(
-      './datasets/fer2013/train',
+      './datasets/PER-2013/train',
       file_extension='jpg',
       transform=torchvision.transforms.Compose([
-          torchvision.transforms.Resize((224, 224)),
+          torchvision.transforms.Resize((48, 48)),
           torchvision.transforms.Grayscale(num_output_channels=3),  # Convert to 3-channel
           torchvision.transforms.ToTensor()
       ]),
   )
+
   def create_fer2013_classification_dataset_fn(): return ds.ImageDataset(
       './datasets/PER-2013/train',
       file_extension='jpg',
       transform=torchvision.transforms.Compose([
-          torchvision.transforms.Resize((224, 224)),
+          torchvision.transforms.Resize((48, 48)),
           torchvision.transforms.Grayscale(num_output_channels=3),  # Convert to 3-channel
           torchvision.transforms.ToTensor()
       ]),
   )
+
   def create_fer2013_classification_test_dataset_fn(): return ds.ImageDataset(
       './datasets/PER-2013/test',
       file_extension='jpg',
       transform=torchvision.transforms.Compose([
-          torchvision.transforms.Resize((224, 224)),
+          torchvision.transforms.Resize((48, 48)),
           torchvision.transforms.Grayscale(num_output_channels=3),  # Convert to 3-channel
           torchvision.transforms.ToTensor()
       ])
@@ -963,7 +1107,9 @@ if __name__ == '__main__':
       'per2013',
       create_fer2013_triplet_dataset_fn,
       create_fer2013_classification_dataset_fn,
-      create_fer2013_classification_test_dataset_fn
+      # create_fer2013_classification_test_dataset_fn,
+      models=['vgg'],
+      batch_size=512 # Adjust batch size as needed
   )], ignore_index=True)
 
   # The process of training models following the triplet loss approach the same way as classification

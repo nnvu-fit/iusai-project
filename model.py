@@ -64,4 +64,15 @@ class Classifier(FeatureExtractor):
 
   def forward(self, x: torch.Tensor) -> torch.Tensor:
     return self.fc(x)  # Classify the features
-  
+
+
+class DDQNAgent:
+  def __init__(self, num_actions: int, model: Classifier, device = None):
+    self.num_actions = num_actions
+    self.q_net = model
+    self.device = device
+    if self.device is None:
+      self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    self.q_net.to(self.device)
+    self.q_net.eval()
