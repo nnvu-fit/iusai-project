@@ -115,45 +115,55 @@ def semantic_validate_model(model, validate_dataset, knowledge_dataset, label_to
   correct_predictions = 0
   total_samples = 0
 
+  num_of_k_nearest = 3
+
   y_true = []
   y_pred = []
 
   with torch.no_grad():
-    # # Store all individual embeddings from knowledge dataset (already embeddings)
-    # knowledge_embeddings = []  # List of (embedding, label_str) tuples
+    # Collect knowledge dataset embeddings and labels
+    k_embeddings_list = []
+    k_labels_list = []
 
-    # # Extract embeddings from knowledge dataset (they are already embeddings)
-    # for k_embeddings, k_labels in knowledge_dataloader:
-    #   k_embeddings, k_labels = k_embeddings.to(device), k_labels.to(device)
+    # Extract embeddings from knowledge dataset
+    for k_embeddings, k_labels in knowledge_dataloader:
+      k_embeddings_list.append(k_embeddings.to(device))
+      k_labels_list.extend([str(label.item()) for label in k_labels])
 
-    #   # Store each individual embedding with its label
-    #   for embedding, label in zip(k_embeddings, k_labels):
-    #     label_str = str(label.item())
-    #     knowledge_embeddings.append((embedding, label_str))
+    # Stack all knowledge embeddings into a single tensor for efficient computation
+    if not k_embeddings_list:
+      raise ValueError("Knowledge dataset is empty")
 
-    # Now validate on the validation dataset (already embeddings)
+    k_embeddings_tensor = torch.cat(k_embeddings_list).to(device)
+
+    # Now validate on the validation dataset
     for val_embeddings, labels in validate_dataloader:
       val_embeddings, labels = val_embeddings.to(device), labels.to(device)
+      # Compute pairwise distances efficiently (batch computation)
+      # Shape: [val_embeddings.size(0), k_embeddings_tensor.size(0)]
+      distances = torch.cdist(val_embeddings, k_embeddings_tensor)
 
-      # # Find nearest individual embedding for each validation embedding
-      # for index in range(len(val_embeddings)):
-      #   min_distance, nearest_label = torch.inf, None
+      # Get indices of k nearest neighbors for each validation embedding
+      _, indices = torch.topk(distances, num_of_k_nearest, dim=1, largest=False)
 
-      #   # Compare with each individual embedding in knowledge base
-      #   for k_embedding, k_label_str in knowledge_embeddings:
-      #     distance = torch.norm(val_embeddings[index] - k_embedding)
-      #     if distance < min_distance:
-      #       min_distance = distance
-      #       nearest_label = k_label_str
+      # Prepare label embeddings tensor once
+      label_embeddings_tensor = torch.stack([label_to_embeddings[label].to(device) for label in k_labels_list])
 
-      #   # Apply semantic transformation: subtract the label embedding of nearest cluster
-      #   if nearest_label in label_to_embeddings:
-      #     val_embeddings[index] = val_embeddings[index] - label_to_embeddings[nearest_label].detach().to(device)
+      # Gather the embeddings of the nearest neighbors
+      # For each validation point, get its k nearest neighbors' embeddings
+      batch_size, k = indices.size()
+      nearest_embeddings = label_embeddings_tensor[indices.view(-1)].view(batch_size, k, -1)
 
-      # Calculate the label embeddings for the current batch
-      label_embeddings = torch.stack([label_to_embeddings[str(label.item())].detach().to(device) for label in labels])
-      # Subtract the label embeddings from the inputs
-      val_embeddings = val_embeddings - label_embeddings
+      # Calculate centroids for each validation point
+      centroid_embeddings = torch.mean(nearest_embeddings, dim=1)
+
+      # move the centroid embeddings to the same device as the model
+      val_embeddings -= centroid_embeddings
+
+      # # Calculate the label embeddings for the current batch
+      # label_embeddings = torch.stack([label_to_embeddings[str(label.item())].detach().to(device) for label in labels])
+      # # Subtract the label embeddings from the inputs
+      # val_embeddings = val_embeddings - label_embeddings
 
       # Use the transformed embeddings for final classification
       outputs = model(val_embeddings)  # For Classifier models
@@ -169,15 +179,19 @@ def semantic_validate_model(model, validate_dataset, knowledge_dataset, label_to
       y_pred += predicted.tolist()
 
   # Calculate precision, recall, and F1 score
-  precision = precision_score(y_true, y_pred, average='weighted')
-  recall = recall_score(y_true, y_pred, average='weighted')
-  f1 = f1_score(y_true, y_pred, average='weighted')
+  precision = precision_score(y_true, y_pred, average='weighted', zero_division=0)
+  recall = recall_score(y_true, y_pred, average='weighted', zero_division=0)
+  f1 = f1_score(y_true, y_pred, average='weighted', zero_division=0)
   accuracy = accuracy_score(y_true, y_pred)
   # Calculate average loss and accuracy
   avg_loss = total_loss / len(validate_dataloader)
   # accuracy = (correct_predictions / total_samples) * 100
   print(
-      f'Semantic Validation average loss: {avg_loss}, Accuracy: {accuracy:.2f}%, Precision: {precision:.2f}%, Recall: {recall:.2f}%, F1 Score: {f1:.2f}%')
+      f'Semantic Validation average loss: {avg_loss}, '
+      f'Accuracy: {100 * accuracy:.2f}%, '
+      f'Precision: {100 * precision:.2f}%, '
+      f'Recall: {100 * recall:.2f}%, '
+      f'F1 Score: {100 * f1:.2f}%')
   return avg_loss, accuracy, precision, recall, f1
 
 
@@ -248,7 +262,7 @@ def get_n_most_informative_samples(dataset, model, n=2):
     for batch in dataloader:
       inputs = batch[0].to(device)
       outputs = model(inputs)
-      all_embeddings.append(outputs.cpu())
+      all_embeddings.append(outputs)
     all_embeddings = torch.cat(all_embeddings)
 
   # Compute pairwise distances between all embeddings
@@ -368,11 +382,26 @@ def AL_RL_semantic_classification_train_process(dataset, model, semantic_embeddi
   import time
   import torch
   import pandas as pd
+  from model import DDQNAgent
+
+  class AlClassificationDataset(torch.utils.data.Dataset):
+      def __init__(self, dataframe):
+          self.dataframe = dataframe
+
+      def __len__(self):
+          return len(self.dataframe)
+
+      def __getitem__(self, idx):
+          row = self.dataframe.iloc[idx]
+          input_tensor = row['input']
+          semantic_tensor = row['semantic']
+          label_tensor = row['label']
+          return input_tensor, semantic_tensor, label_tensor
 
   device = get_device()
   # create result df
-  result_df = pd.DataFrame(columns=['dataset', 'model', 'fold', 'avg_loss', 'avg_test_loss',
-                                    'avg_val_loss', 'precision', 'recall', 'f1', 'accuracy'])
+  result_df = pd.DataFrame(columns=['dataset', 'model', 'fold', 'avg_loss', 'avg_val_loss',
+                                    'avg_test_loss', 'precision', 'recall', 'f1', 'accuracy'])
   # load results from file if exists
   if os.path.exists(f'results/cv-triplet/{current_dataset}_{current_backbone_model._get_name()}_{time.strftime("%Y%m%d-%H%M%S")}.csv'):
     result_df = pd.read_csv(
@@ -386,6 +415,14 @@ def AL_RL_semantic_classification_train_process(dataset, model, semantic_embeddi
   label_to_embedding = {label: semantic_embedding_fn(
       index) * embedding for index, (label, embedding) in enumerate(label_to_embedding.items())}
   print('Label embeddings computed.')
+
+  # Initialize context for training
+  epsilon = 0.001
+  count_list = []  # To keep track of the number of actions taken in each fold
+  num_episodes = 5
+  num_al_iterations = 5
+  num_epochs = 10
+
   # split dataset using k-fold cross-validation
   dataset_size = len(dataset)
   fold_size = dataset_size // k_fold
@@ -394,30 +431,165 @@ def AL_RL_semantic_classification_train_process(dataset, model, semantic_embeddi
     fold_start_time = time.time()
     # Do the same process as classification_train_process but with semantic embeddings
     semantic_embeddings = label_to_embedding
-    # Initialize the trainer
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    loss_fn = torch.nn.CrossEntropyLoss()
     # Split dataset into train and validation sets
-    train_dataset = torch.utils.data.Subset(dataset, list(range(fold * fold_size, (fold + 1) * fold_size)))
-    val_dataset = torch.utils.data.Subset(dataset, list(range((fold + 1) * fold_size, dataset_size)))
+    train_dataset = torch.utils.data.Subset(dataset, list(
+        range(fold_size * fold)) + list(range(fold_size * (fold + 1), dataset_size)))
+    val_dataset = torch.utils.data.Subset(dataset, range(fold_size * fold, fold_size * (fold + 1)))
     # Create data loaders
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-    # Add active learning here
-    # Placeholder for active learning logic, e.g., selecting samples based on uncertainty or diversity
+    # Initialize the agent
+    agent = DDQNAgent(num_actions=len(dataset.labels), model=model, batch_size=batch_size, device=device)
 
-    # Training loop
-    for epoch in range(10):  # Placeholder for number of epochs
-      model.train()
-      for batch in train_loader:
-        optimizer.zero_grad()
-        outputs = model(batch['input_ids'], batch['attention_mask'], semantic_embeddings)
-        loss = loss_fn(outputs, batch['labels'])
-        loss.backward()
-        optimizer.step()
-    print(f'Fold {fold + 1} completed in {time.time() - fold_start_time:.2f} seconds.')
-    # Validate the model on the test set each fold if provided
+    # Train the model
+    for episode in range(num_episodes):  # Number of episodes
+      print(f'Episode {episode + 1}/{num_episodes}...')
+      count = 0
+      train_df = pd.DataFrame(columns=['input', 'semantic', 'label'])
+      # Train the agent
+      for (inputs, labels) in train_loader:
+        inputs, labels = inputs.to(device), labels.to(device)
+        # get the semantic embeddings for the labels
+        labels_embeddings = torch.stack([semantic_embeddings[label.item()] for label in labels]).to(device)
+        # append the inputs, semantic embeddings and labels to the train_df
+        for i in range(len(inputs)):
+          train_df = train_df.append({'input': inputs[i], 'semantic': labels_embeddings[i], 'label': labels[i]}, ignore_index=True)
+
+        # For each input, select an action using the agent
+        for input_index in range(len(inputs)):
+          state = inputs[input_index]  # Add batch dimension
+          # select an action using the agent
+          action = agent.select_action(state.unsqueeze(0), epsilon=epsilon)  # Epsilon-greedy action selection
+          if input_index < len(inputs) - 2:
+            next_state = inputs[input_index + 1]  # Next state
+            if action != labels[input_index].item():
+              reward = -1  # Negative reward for incorrect action
+              done = False
+            else:
+              reward = 1  # Positive reward for correct action
+              done = True
+            agent.store_experience(state, action, reward, next_state, done)
+      count_list.append(count)
+
+      # Train the agent using the stored experiences
+      _, _, train_accuracy = agent.train_q_net(train_loader, semantic_embeddings)
+      _, before_accuracy, _, _, _ = semantic_validate_model(
+          agent.q_net, val_dataset, train_dataset, label_to_embedding, batch_size=batch_size)
+      # Update agent's q-network if enough experiences are stored
+      if len(agent.memory) > agent.batch_size:
+        agent.update()
+      _, after_accuracy, _, _, _ = semantic_validate_model(
+          agent.q_net, val_dataset, train_dataset, label_to_embedding, batch_size=batch_size)
+      print(f'Training accuracy for episode {episode + 1}: {train_accuracy:.2f}%')
+      print(f'Before update validation results: {100 * before_accuracy:.2f}%')
+      print(f'After update validation results: {100 * after_accuracy:.2f}%')
+
+      #########################Active Learning Iterations#########################
+
+      # apply active learning logic here
+      for al_iteration in range(num_al_iterations):  # Number of active learning iterations
+        print(f'Active Learning iteration {al_iteration + 1}/{num_al_iterations}...')
+
+        # Get the n most informative samples
+        informative_samples = get_n_most_informative_samples(test_dataset, model, n=2)
+        # calculate the semantic embeddings for the informative samples
+        informative_samples_embeddings = [label_to_embedding[sample['label']] for sample in informative_samples]
+        # append the informative samples to the train_df
+        for i, sample in enumerate(informative_samples):
+          train_df = train_df.append({'input': sample['input'], 'semantic': informative_samples_embeddings[i], 'label': sample['label']}, ignore_index=True)
+
+        # Initialize the AL Train Configuration
+        al_criterion = torch.nn.CrossEntropyLoss()
+        al_optimizer = torch.optim.Adam(agent.q_net.parameters(), lr=1e-4)
+        al_train_loss_list = []
+
+        # Convert the train_df to a DataLoader
+        train_loader = DataLoader(train_df, batch_size=batch_size, shuffle=True)
+        for epoch in range(num_epochs):
+          print(f'AL Iteration {al_iteration + 1}, Epoch {epoch + 1}/{num_epochs}...')
+          model.train()
+          al_correct = 0
+          al_total_loss = 0.0
+          for (inputs, semantic_embeddings, labels) in train_loader:
+            inputs, semantic_embeddings, labels = inputs.to(device), semantic_embeddings.to(device), labels.to(device)
+            al_optimizer.zero_grad()
+            inputs = inputs - semantic_embeddings
+            outputs = agent.q_net.model(inputs)
+            _, al_predicted = torch.max(outputs.data, 1)
+            al_correct += (al_predicted == labels).sum().item()
+            al_total += labels.size(0)
+            al_loss = al_criterion(outputs, labels)
+            al_loss.backward()
+            al_optimizer.step()
+            al_total_loss += al_loss.item()
+
+          al_train_accuracy = 100 * al_correct / al_total
+          al_train_loss_list.append(al_total_loss / len(train_loader))
+          print(f'AL Iteration {al_iteration + 1}, Epoch {epoch + 1}/{num_epochs}... Loss: {al_total_loss / len(train_loader):.4f}, Accuracy: {al_train_accuracy:.2f}%')
+        
+        # Validate the model after active learning iteration
+        avg_val_loss, val_accuracy, val_precision, val_recall, val_f1 = semantic_validate_model(
+            agent.q_net, val_dataset, train_dataset, label_to_embedding, batch_size=batch_size)
+        print(f'AL Iteration {al_iteration + 1} Validation results:')
+        print(f' - Loss: {avg_val_loss:.4f}')
+        print(f' - Accuracy: {100*val_accuracy:.2f}%')
+        print(f' - Precision: {100*val_precision:.2f}%')
+        print(f' - Recall: {100*val_recall:.2f}%')
+        print(f' - F1 Score: {100*val_f1:.2f}%')
+
+    fold_end_time = time.time()
+
+    # Validate the model
+    avg_val_loss, val_accuracy, val_precision, val_recall, val_f1 = semantic_validate_model(
+        model, val_dataset, train_dataset, label_to_embedding, batch_size=batch_size)
+    print(f'Validation results for fold {fold + 1}:')
+    print(f' - Loss: {avg_val_loss:.4f}')
+    print(f' - Accuracy: {100*val_accuracy:.2f}%')
+    print(f' - Precision: {100*val_precision:.2f}%')
+    print(f' - Recall: {100*val_recall:.2f}%')
+    print(f' - F1 Score: {100*val_f1:.2f}%')
+
+    # Save the model after each fold
+    model_dir = f'models/classification/{current_dataset}_{current_backbone_model._get_name()}'
+    if not os.path.exists(model_dir):
+      os.makedirs(model_dir)
+    model_path = f'{model_dir}/model_fold_{fold + 1}.pth'
+    torch.save(model.state_dict(), model_path)
+    print(f'Model saved to {model_path}')
+
+    # validate the model on the test set each fold if provided
+    if test_dataset is not None:
+      avg_test_loss, accuracy, precision, recall, f1 = semantic_validate_model(
+          model, test_dataset, train_dataset, label_to_embedding, batch_size=batch_size)
+      print(f'Fold {fold + 1}: Average test loss: {avg_test_loss}, Test accuracy: {100 * accuracy:.2f}%, Test precision: {100 * precision:.2f}%, Test recall: {100 * recall:.2f}%, Test F1 Score: {100 * f1:.2f}%')
+      result_df = pd.concat([result_df, pd.DataFrame({
+          'dataset': current_dataset,
+          'model': model._get_name(),
+          'fold': fold + 1,
+          'avg_loss': 0,
+          'avg_test_loss': avg_test_loss,
+          'avg_val_loss': avg_val_loss,
+          'precision': precision,
+          'recall': recall,
+          'f1': f1,
+          'accuracy': accuracy,
+          'total_time': fold_end_time - fold_start_time
+      }, index=[0])], ignore_index=True)
+
+  # save the results to a CSV file to keep track of the training process by current_backbone_model and current_dataset
+  if current_backbone_model is not None and current_dataset is not None:
+    result_df['dataset'] = current_dataset
+  if not result_df.empty:
+    result_dir = 'results/cv-triplet'
+    if not os.path.exists(result_dir):
+      os.makedirs(result_dir)
+    result_path = f'{result_dir}/{current_dataset}_{current_backbone_model._get_name()}_{time.strftime("%Y%m%d-%H%M%S")}.csv'
+    # If the directory does not exist, create it
+    # save the results to a CSV file with the current dataset and model in name and date
+    result_df.to_csv(result_path, index=False)
+
+  # Return the trained model and the average loss
+  return model, 0, 0, label_to_embedding
 
 
 def semantic_classification_train_process(dataset, model, semantic_embedding_fn, k_fold=5, batch_size=64, test_dataset=None):
@@ -720,10 +892,14 @@ def train(dataset, model, train_process='triplet', semantic_embedding_fn=None, k
   elif train_process == 'semantic_classification':
     trained_model, avg_loss, avg_test_loss, label_to_embedding = semantic_classification_train_process(
         dataset, model, semantic_embedding_fn=semantic_embedding_fn, k_fold=k_fold, batch_size=batch_size, test_dataset=test_dataset)
+  elif train_process == 'AL_RL_semantic_classification':
+    trained_model, avg_loss, avg_test_loss, label_to_embedding = AL_RL_semantic_classification_train_process(
+        dataset, model, semantic_embedding_fn=semantic_embedding_fn, k_fold=k_fold, batch_size=batch_size, test_dataset=test_dataset)
   else:
     raise ValueError(f'Unknown training process: {train_process}')
   print('Training completed.')
-  return trained_model, avg_loss, avg_test_loss, (label_to_embedding if train_process == 'semantic_classification' else None)
+  label_to_embedding = label_to_embedding if train_process in ['semantic_classification', 'AL_RL_semantic_classification'] else None
+  return trained_model, avg_loss, avg_test_loss, label_to_embedding
 
 
 def create_training_process_df(
@@ -812,7 +988,20 @@ def create_train_test_dataset(create_train_dataset_fn, create_test_dataset_fn=No
 
 
 def train_and_evaluate(model, train_data, test_data, process_type, semantic_fn=None, description=""):
-  """Train and evaluate a model, then record the results."""
+  """
+  Train and evaluate a model, then record the results.
+  This function checks if the model has already been trained on the dataset and loads it if available.
+  If not, it trains the model and saves the results to a CSV file.
+  Args:
+    model: The model to train and evaluate.
+    train_data: The training dataset.
+    test_data: The test dataset.
+    process_type: The type of training process ('triplet', 'classification', 'semantic_classification', 'AL_RL_semantic_classification').
+    semantic_fn: A function to compute semantic embeddings (optional).
+    description: A description of the training process (optional).
+  Returns:
+    None
+  """
   import torch
 
   global current_dataset
@@ -839,6 +1028,8 @@ def train_and_evaluate(model, train_data, test_data, process_type, semantic_fn=N
     elif process_type == 'classification':
       model_path = f'models/classification/{current_dataset}_{model._get_name()}/model_fold_5.pth'
     elif process_type == 'semantic_classification':
+      model_path = f'models/classification/{current_dataset}_{model._get_name()}/model_fold_5.pth'
+    elif process_type == 'AL_RL_semantic_classification':
       model_path = f'models/classification/{current_dataset}_{model._get_name()}/model_fold_5.pth'
     else:
       raise ValueError(f'Unknown process type: {process_type}')
@@ -872,7 +1063,7 @@ def train_and_evaluate(model, train_data, test_data, process_type, semantic_fn=N
     trained_model = model
     avg_loss, avg_val_loss, label_embedding = 0.0, 0.0, None
     # calculate label_embedding if process_type is semantic_classification
-    if process_type == 'semantic_classification':
+    if process_type == 'semantic_classification' or process_type == 'AL_RL_semantic_classification':
       label_embedding = compute_label_embeddings(
           train_data.labels, trained_model.backbone_out_features)
       print(f'Label embeddings computed for {description} model.')
@@ -892,7 +1083,7 @@ def train_and_evaluate(model, train_data, test_data, process_type, semantic_fn=N
     print(f'Results: Loss: {avg_loss:.4f}, Val Loss: {avg_val_loss:.4f}, '
           f'Test Loss: {avg_test_loss:.4f}, Accuracy: {accuracy:.2f}%, Precision: {precision:.2f}%, '
           f'Recall: {recall:.2f}%, F1 Score: {f1:.2f}%')
-  elif process_type == 'semantic_classification':
+  elif process_type == 'semantic_classification' or process_type == 'AL_RL_semantic_classification':
     avg_test_loss, accuracy, precision, recall, f1 = semantic_validate_model(
         trained_model, test_data, train_data, label_to_embeddings=label_embedding, batch_size=batch_size)
     print(f'Results: Loss: {avg_loss:.4f}, Val Loss: {avg_val_loss:.4f}, '
@@ -913,7 +1104,7 @@ def train_and_evaluate(model, train_data, test_data, process_type, semantic_fn=N
       'recall': [recall],
       'f1': [f1]
   })], ignore_index=True)
-  result_df = result_df.sort_values(by=['dataset', 'model']).reset_index(drop=True)
+  # result_df = result_df.sort_values(by=['dataset', 'model']).reset_index(drop=True)
 
   # Save results to CSV
   result_df.to_csv('triplet_training_results.csv', index=False)
@@ -1073,11 +1264,12 @@ if __name__ == '__main__':
   # )], ignore_index=True)
 
   # FER2013 dataset
+  input_size = (48, 48)  # FER2013 input size
   def create_fer2013_triplet_dataset_fn(): return ds.TripletImageDataset(
       './datasets/PER-2013/train',
       file_extension='jpg',
       transform=torchvision.transforms.Compose([
-          torchvision.transforms.Resize((48, 48)),
+          torchvision.transforms.Resize(input_size),
           torchvision.transforms.Grayscale(num_output_channels=3),  # Convert to 3-channel
           torchvision.transforms.ToTensor()
       ]),
@@ -1087,7 +1279,7 @@ if __name__ == '__main__':
       './datasets/PER-2013/train',
       file_extension='jpg',
       transform=torchvision.transforms.Compose([
-          torchvision.transforms.Resize((48, 48)),
+          torchvision.transforms.Resize(input_size),
           torchvision.transforms.Grayscale(num_output_channels=3),  # Convert to 3-channel
           torchvision.transforms.ToTensor()
       ]),
@@ -1097,7 +1289,7 @@ if __name__ == '__main__':
       './datasets/PER-2013/test',
       file_extension='jpg',
       transform=torchvision.transforms.Compose([
-          torchvision.transforms.Resize((48, 48)),
+          torchvision.transforms.Resize(input_size),
           torchvision.transforms.Grayscale(num_output_channels=3),  # Convert to 3-channel
           torchvision.transforms.ToTensor()
       ])
@@ -1109,7 +1301,7 @@ if __name__ == '__main__':
       create_fer2013_classification_dataset_fn,
       # create_fer2013_classification_test_dataset_fn,
       models=['vgg'],
-      batch_size=512 # Adjust batch size as needed
+      batch_size=256  # Adjust batch size as needed
   )], ignore_index=True)
 
   # The process of training models following the triplet loss approach the same way as classification
@@ -1150,29 +1342,39 @@ if __name__ == '__main__':
         triplet_model, triplet_dataset, None, 'triplet',
         description="Triplet"
     )
-
-    # 3. Train classifier with triplet embeddings (no label moving)
-    current_dataset = f"{dataset_type}_Cross-Validation_Triplet"
+    # 3. Create embedded datasets using the trained triplet model
+    print(f'Creating embedded datasets for {dataset_type} using trained triplet model...')
+    # Create embedded datasets with the trained triplet model
     embedded_train_ds = ds.EmbeddedDataset(train_ds, trained_triplet, is_moving_labels_to_function=False)
     embedded_test_ds = ds.EmbeddedDataset(test_ds, trained_triplet, is_moving_labels_to_function=False)
-    classifier_model = Classifier(trained_triplet)
-    trained_classifier, _ = train_and_evaluate(
-        classifier_model, embedded_train_ds, embedded_test_ds, 'semantic_classification',
-        semantic_fn=None, description="Cross-Validation + Triplet"
-    )
+    print(f'Embedded datasets created for {dataset_type}.')
 
-    # 4. Train classifier with x-to-x label moving
-    current_dataset = f"{dataset_type}_Cross-Validation_Triplet_Moving_Labels_x-to-x"
-    trained_classifier_x_to_x, _ = train_and_evaluate(
-        Classifier(trained_triplet), embedded_train_ds, embedded_test_ds, 'semantic_classification',
-        semantic_fn=lambda x: x, description="Cross-Validation + Triplet + Moving Labels - x => x"
-    )
+    # # 4. Train classifier with triplet embeddings (no label moving)
+    # current_dataset = f"{dataset_type}_Cross-Validation_Triplet"
+    # trained_classifier, _ = train_and_evaluate(
+    #     Classifier(trained_triplet), embedded_train_ds, embedded_test_ds, 'semantic_classification',
+    #     semantic_fn=None, description="Cross-Validation + Triplet"
+    # )
 
-    # 5. Train classifier with x-to-4x label moving
-    current_dataset = f"{dataset_type}_Cross-Validation_Triplet_Moving_Labels_x-to-4x"
-    trained_classifier_x_to_4x, _ = train_and_evaluate(
-        Classifier(trained_triplet), embedded_train_ds, embedded_test_ds, 'semantic_classification',
-        semantic_fn=lambda x: 4 * x, description="Cross-Validation + Triplet + Moving Labels - x => 4*x"
+    # # 5. Train classifier with x-to-x label moving
+    # current_dataset = f"{dataset_type}_Cross-Validation_Triplet_Moving_Labels_x-to-x"
+    # trained_classifier_x_to_x, _ = train_and_evaluate(
+    #     Classifier(trained_triplet), embedded_train_ds, embedded_test_ds, 'semantic_classification',
+    #     semantic_fn=lambda x: x, description="Cross-Validation + Triplet + Moving Labels - x => x"
+    # )
+
+    # # 6. Train classifier with x-to-4x label moving
+    # current_dataset = f"{dataset_type}_Cross-Validation_Triplet_Moving_Labels_x-to-4x"
+    # trained_classifier_x_to_4x, _ = train_and_evaluate(
+    #     Classifier(trained_triplet), embedded_train_ds, embedded_test_ds, 'semantic_classification',
+    #     semantic_fn=lambda x: 4 * x, description="Cross-Validation + Triplet + Moving Labels - x => 4*x"
+    # )
+
+    # 7. Train classifier with x-to-4x label moving with AL-RL
+    current_dataset = f"{dataset_type}_Cross-Validation_Triplet_Moving_Labels_AL_RL"
+    trained_classifier_al_rl_x_to_4x, _ = train_and_evaluate(
+        Classifier(trained_triplet), embedded_train_ds, embedded_test_ds, 'AL_RL_semantic_classification',
+        semantic_fn=lambda x: 4 * x, description="Cross-Validation + Triplet + AL-RL Moving Labels - x => 4*x"
     )
 
   print('Training process completed.')

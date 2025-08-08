@@ -1,3 +1,4 @@
+import random
 from typing import TypeVar
 import torch
 import torch.nn as nn
@@ -46,7 +47,8 @@ class FeatureExtractor(nn.Module):
     x = self.features(x)
     # Return the feature vector
     return x
-  
+
+
 class Classifier(FeatureExtractor):
   def __init__(self, backbone: FeatureExtractor, output_size: int = 1000):
     super(Classifier, self).__init__(backbone.backbone)
@@ -67,12 +69,140 @@ class Classifier(FeatureExtractor):
 
 
 class DDQNAgent:
-  def __init__(self, num_actions: int, model: Classifier, device = None):
+  def __init__(self, num_actions: int, model: Classifier, batch_size=64, device=None):
     self.num_actions = num_actions
     self.q_net = model
+
+    # Initialize the target network with the same architecture and weights
+    # but set it to evaluation mode
+    self.target_net = model
+    self.target_net.load_state_dict(self.q_net.state_dict())
+    self.target_net.eval()
+
+    # Define the optimizer and loss function
+    self.optimizer = torch.optim.Adam(self.q_net.parameters(), lr=0.001)
+    self.criterion = nn.MSELoss()
+    self.gamma = 0.99  # Discount factor for future rewards
+    self.tau = 0.005  # Soft update factor for target network
+
+    # Set the device for the model
     self.device = device
     if self.device is None:
       self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
     self.q_net.to(self.device)
-    self.q_net.eval()
+    self.target_net.to(self.device)
+
+    self.memory = []  # Experience replay memory
+    self.batch_size = batch_size  # Batch size for training
+
+  def _get_name(self):
+    return f"DDQNAgent({self.q_net._get_name()})"
+
+  def select_action(self, state: torch.Tensor, epsilon: float) -> int:
+    """
+    Select an action based on epsilon-greedy policy.
+    :param state: Current state of the environment.
+    :param epsilon: Probability of selecting a random action.
+    :return: Selected action index.
+    """
+    if torch.rand(1).item() < epsilon:
+      # Select a random action
+      return torch.randint(0, self.num_actions, (1,)).item()
+    else:
+      # Select the action with the highest Q-value
+      with torch.no_grad():
+        state = state.to(self.device)
+        q_values = self.q_net(state)
+        return q_values.argmax().item()
+
+  def store_experience(self, state: torch.Tensor, action: int, reward: float, next_state: torch.Tensor, done: bool):
+    """
+    Store the experience in memory.
+    :param state: Current state of the environment.
+    :param action: Action taken.
+    :param reward: Reward received.
+    :param next_state: Next state of the environment.
+    :param done: Whether the episode is done.
+    """
+    self.memory.append((state, action, reward, next_state, done))
+
+  def sample_experience(self):
+    """
+    Sample a batch of experiences from memory.
+    :return: A tuple of (states, actions, rewards, next_states, dones).
+    """
+    return zip(*random.sample(self.memory, min(len(self.memory), self.batch_size)))
+
+  def update(self):
+    """
+    Update the Q-network using a batch of experiences.
+    """
+    if len(self.memory) < self.batch_size:
+      return
+
+    # Sample a batch of experiences
+    states, actions, rewards, next_states, dones = self.sample_experience()
+
+    states = torch.stack(states).to(self.device)
+    actions = torch.tensor(actions).to(self.device)
+    rewards = torch.tensor(rewards, dtype=torch.float32).to(self.device)
+    next_states = torch.stack(next_states).to(self.device)
+    dones = torch.tensor(dones, dtype=torch.float32).to(self.device)
+
+    # Compute Q-values for the current states
+    q_values = self.q_net(states).gather(1, actions.unsqueeze(1)).squeeze(1)
+
+    # Compute Q-values for the next states
+    with torch.no_grad():
+      next_q_values = self.target_net(next_states).max(1)[0]
+      expected_q_values = rewards + (1 - dones) * self.gamma * next_q_values
+
+    # Compute the loss
+    loss = self.criterion(q_values, expected_q_values)
+
+    # Optimize the Q-network
+    self.optimizer.zero_grad()
+    loss.backward()
+    self.optimizer.step()
+
+    # Soft update the target network
+    for target_param, local_param in zip(self.target_net.parameters(), self.q_net.parameters()):
+      target_param.data.copy_(self.tau * local_param.data + (1 - self.tau) * target_param.data)
+
+  def train_q_net(self, data_loader, semantic_embeddings, epochs=10):
+    """
+    Train the agent using the stored experiences.
+    """
+
+    loss_fn = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(self.q_net.parameters(), lr=0.001)
+
+    for epoch in range(epochs):
+      correct = 0
+      total = 0
+      loss_list = []
+      self.q_net.train()  # Set the model to training mode
+      for (inputs, labels) in data_loader:
+        inputs, labels = inputs.to(self.device), labels.to(self.device)
+        # get the semantic embeddings for the labels
+        label_embeddings = torch.stack(
+            [semantic_embeddings[str(label.item())].detach().to(self.device) for label in labels])
+        # Subtract the semantic embeddings from the inputs
+        inputs = inputs - label_embeddings
+
+        outputs = self.q_net(inputs)
+        loss = loss_fn(outputs, labels)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        _, predicted = torch.max(outputs.data, 1)
+        total += labels.size(0)
+        correct += (predicted == labels).sum().item()
+        loss_list.append(loss.item())
+      train_accuracy = 100 * correct / total
+      avg_loss = sum(loss_list) / len(loss_list)
+      # print(f'Epoch [{epoch + 1}/{epochs}], Loss: {avg_loss:.4f}, Accuracy: {train_accuracy:.2f}%')
+
+    # return the trained Q-network, average loss, and training accuracy
+    return self.q_net, avg_loss, train_accuracy
