@@ -87,6 +87,45 @@ def validate_model(model, dataset, batch_size=64):
   return avg_loss, accuracy, precision, recall, f1
 
 
+def find_k_nearest_semantic_embeddings(knowledge_dataset, target_embeddings, k=3, batch_size=64):
+  """
+  Find the k nearest semantic embeddings for each embedding in the dataset.
+  Args:
+    knowledge_dataset: A dataset containing semantic embeddings to search in.
+    target_embeddings: The embeddings to find the nearest neighbors for.
+    k: The number of nearest neighbors to find.
+  Returns:
+    A list of indices of the k nearest semantic embeddings.
+  """
+  from trainer import get_device
+  import torch
+  from torch.utils.data import DataLoader
+
+  device = get_device()
+
+  # Collect knowledge dataset embeddings and labels
+  k_embeddings_list = []
+  k_labels_list = []
+  knowledge_dataloader = DataLoader(knowledge_dataset, batch_size=batch_size, shuffle=False)
+
+  # Extract embeddings from knowledge dataset
+  for k_embeddings, k_labels in knowledge_dataloader:
+    k_embeddings_list.append(k_embeddings.to(device))
+    k_labels_list.extend([str(label.item()) for label in k_labels])
+
+  # Stack all knowledge embeddings into a single tensor for efficient computation
+  if not k_embeddings_list:
+    raise ValueError("Knowledge dataset is empty")
+  k_embeddings_tensor = torch.cat(k_embeddings_list).to(device)
+
+  # Compute pairwise distances efficiently (batch computation)
+  distances = torch.cdist(torch.stack(target_embeddings), k_embeddings_tensor)
+  # Get indices of k nearest neighbors for each target embedding
+  _, indices = torch.topk(distances, k, dim=1, largest=False)
+
+  return indices
+
+
 def semantic_validate_model(model, validate_dataset, knowledge_dataset, label_to_embeddings, batch_size=64):
   """
     Validate the model on the given dataset using semantic embeddings and return the average loss and accuracy.
@@ -238,7 +277,7 @@ def compute_label_embeddings(labels, out_features):
   return label_to_embedding
 
 
-def get_n_most_informative_samples(dataset, model, n=2):
+def get_n_most_informative_samples_indices(dataset, model, samples_taken_indices: list, n=2):
   """
   Get the n most informative samples from the dataset using the model.
   Args:
@@ -248,29 +287,41 @@ def get_n_most_informative_samples(dataset, model, n=2):
   """
   from torch.utils.data import DataLoader
   import torch
-  from sklearn.metrics import pairwise_distances
+  import numpy as np
   from trainer import get_device
 
   device = get_device()
   # Create a data loader for the dataset
   dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
+  outputs = []
   # Get the embeddings for all samples in the dataset
   model.eval()
   with torch.no_grad():
-    all_embeddings = []
     for batch in dataloader:
       inputs = batch[0].to(device)
-      outputs = model(inputs)
-      all_embeddings.append(outputs)
-    all_embeddings = torch.cat(all_embeddings)
+      outputs.append(model(inputs).cpu())
+  outputs = torch.cat(outputs)
+  # Calculate entropy to find the most informative samples
+  with torch.no_grad():
+    # Apply softmax to get probability distributions
+    probs = torch.nn.functional.softmax(outputs, dim=1)
 
-  # Compute pairwise distances between all embeddings
-  distances = pairwise_distances(all_embeddings)
+    # Calculate entropy for each sample: -sum(p * log(p))
+    # Handle zero probabilities by adding a small epsilon to avoid log(0)
+    epsilon = 1e-10
+    entropy = -torch.sum(probs * torch.log(probs + epsilon), dim=1)
 
-  # Get the indices of the n most informative samples
-  informative_indices = distances.sum(axis=1).argsort()[:n]
-  return informative_indices
+    # Sort samples by entropy (higher entropy = more uncertainty = more informative)
+    # We use numpy for sorting to get indices that we can use to select original samples
+    entropy_np = entropy.cpu().numpy()
+    # exclude already taken samples
+    entropy_np[samples_taken_indices] = -np.inf  # Set taken samples' entropy to -inf to exclude them
+    most_uncertain_indices = np.argsort(entropy_np)[::-1][:n]
+
+  # Return the indices of the n most informative samples
+  # These indices correspond to the original dataset
+  return most_uncertain_indices.tolist()
 
 
 def triplet_train_process(dataset, model, k_fold=5, batch_size=64):
@@ -374,8 +425,18 @@ def triplet_train_process(dataset, model, k_fold=5, batch_size=64):
 
 
 def AL_RL_semantic_classification_train_process(dataset, model, semantic_embedding_fn, k_fold=5, batch_size=64, test_dataset=None):
-  """ Train the model on the given dataset and return the scored model and average loss.
+  """
+  Train the model on the given dataset and return the scored model and average loss.
   This function is a placeholder for a specific training process that might involve moving labels to function.
+  Args:
+    dataset: The dataset to train on (ds.EmbeddedDataset).
+    model: The model to train.
+    semantic_embedding_fn: A function to compute semantic embeddings for the labels.
+    k_fold: The number of folds for cross-validation.
+    batch_size: The batch size to use for training.
+    test_dataset: Optional; a dataset to evaluate the model on after training.
+  Returns:
+    The trained model and the average loss.
   """
   from trainer import get_device
   from torch.utils.data import DataLoader
@@ -385,18 +446,18 @@ def AL_RL_semantic_classification_train_process(dataset, model, semantic_embeddi
   from model import DDQNAgent
 
   class AlClassificationDataset(torch.utils.data.Dataset):
-      def __init__(self, dataframe):
-          self.dataframe = dataframe
+    def __init__(self, dataframe):
+      self.dataframe = dataframe.reset_index(drop=True)
 
-      def __len__(self):
-          return len(self.dataframe)
+    def __len__(self):
+      return len(self.dataframe)
 
-      def __getitem__(self, idx):
-          row = self.dataframe.iloc[idx]
-          input_tensor = row['input']
-          semantic_tensor = row['semantic']
-          label_tensor = row['label']
-          return input_tensor, semantic_tensor, label_tensor
+    def __getitem__(self, idx):
+      row = self.dataframe.iloc[idx]
+      input_tensor = row['input']
+      semantic_tensor = row['semantic']
+      label_tensor = row['label']
+      return input_tensor, semantic_tensor, label_tensor
 
   device = get_device()
   # create result df
@@ -422,6 +483,7 @@ def AL_RL_semantic_classification_train_process(dataset, model, semantic_embeddi
   num_episodes = 5
   num_al_iterations = 5
   num_epochs = 10
+  num_of_k_nearest = 3
 
   # split dataset using k-fold cross-validation
   dataset_size = len(dataset)
@@ -450,10 +512,16 @@ def AL_RL_semantic_classification_train_process(dataset, model, semantic_embeddi
       for (inputs, labels) in train_loader:
         inputs, labels = inputs.to(device), labels.to(device)
         # get the semantic embeddings for the labels
-        labels_embeddings = torch.stack([semantic_embeddings[label.item()] for label in labels]).to(device)
+        labels_embeddings = torch.stack([semantic_embeddings[str(label.item())] for label in labels]).to(device)
         # append the inputs, semantic embeddings and labels to the train_df
+        train_data_list = []
         for i in range(len(inputs)):
-          train_df = train_df.append({'input': inputs[i], 'semantic': labels_embeddings[i], 'label': labels[i]}, ignore_index=True)
+          train_data_list.append({
+              'input': inputs[i].cpu().detach().numpy(),
+              'semantic': labels_embeddings[i].cpu().detach().numpy(),
+              'label': labels[i].cpu().detach().numpy()
+          })
+        train_df = pd.concat([train_df, pd.DataFrame(train_data_list)], ignore_index=True)
 
         # For each input, select an action using the agent
         for input_index in range(len(inputs)):
@@ -473,30 +541,61 @@ def AL_RL_semantic_classification_train_process(dataset, model, semantic_embeddi
 
       # Train the agent using the stored experiences
       _, _, train_accuracy = agent.train_q_net(train_loader, semantic_embeddings)
-      _, before_accuracy, _, _, _ = semantic_validate_model(
-          agent.q_net, val_dataset, train_dataset, label_to_embedding, batch_size=batch_size)
+      print(f'Training accuracy for episode {episode + 1}: {train_accuracy:.2f}%')
+      print('Before Update: ', end='')
+      semantic_validate_model(agent.q_net, val_dataset, train_dataset, label_to_embedding, batch_size=batch_size)
       # Update agent's q-network if enough experiences are stored
       if len(agent.memory) > agent.batch_size:
         agent.update()
-      _, after_accuracy, _, _, _ = semantic_validate_model(
-          agent.q_net, val_dataset, train_dataset, label_to_embedding, batch_size=batch_size)
-      print(f'Training accuracy for episode {episode + 1}: {train_accuracy:.2f}%')
-      print(f'Before update validation results: {100 * before_accuracy:.2f}%')
-      print(f'After update validation results: {100 * after_accuracy:.2f}%')
+      print('After Update: ', end='')
+      semantic_validate_model(agent.q_net, val_dataset, train_dataset, label_to_embedding, batch_size=batch_size)
 
-      #########################Active Learning Iterations#########################
-
+      ######################### Active Learning Iterations #########################
+      sample_taken = 0
+      samples_taken_indices = []  # To keep track of the indices of samples taken in each iteration
       # apply active learning logic here
       for al_iteration in range(num_al_iterations):  # Number of active learning iterations
         print(f'Active Learning iteration {al_iteration + 1}/{num_al_iterations}...')
-
-        # Get the n most informative samples
-        informative_samples = get_n_most_informative_samples(test_dataset, model, n=2)
-        # calculate the semantic embeddings for the informative samples
-        informative_samples_embeddings = [label_to_embedding[sample['label']] for sample in informative_samples]
-        # append the informative samples to the train_df
-        for i, sample in enumerate(informative_samples):
-          train_df = train_df.append({'input': sample['input'], 'semantic': informative_samples_embeddings[i], 'label': sample['label']}, ignore_index=True)
+        sample_taken += 2
+        # Get the n most informative samples indices
+        informative_samples_indices = get_n_most_informative_samples_indices(
+            val_dataset, agent.q_net, samples_taken_indices, n=sample_taken)
+        # Update the samples taken indices
+        samples_taken_indices.extend(informative_samples_indices)
+        print(f'Informative samples indices: {informative_samples_indices}')
+        # Get the informative samples from the validation dataset
+        agent.q_net.eval()  # Set the model to evaluation mode
+        with torch.no_grad():
+          informative_samples = [val_dataset[i] for i in informative_samples_indices]
+          # append the informative samples to the train_df, but use predicted labels from agent
+          train_data_list = []
+          sample_embeddings = [sample[0] for sample in informative_samples]
+          # Find k nearest semantic embeddings
+          k_nearest_indices = find_k_nearest_semantic_embeddings(train_dataset, sample_embeddings, k=num_of_k_nearest)
+          # get the semantic embeddings for the k nearest neighbors each sample
+          k_nearest_semantic_embeddings = [
+              [semantic_embeddings[str(train_dataset[j][1])] for j in indices] for indices in k_nearest_indices
+          ]
+          # calculate the mean of the k nearest semantic embeddings
+          k_nearest_semantic_embeddings = [
+              torch.mean(torch.stack(embeddings), dim=0) for embeddings in k_nearest_semantic_embeddings
+          ]
+          # Create a list of tuples (input, predicted semantic embedding, label)
+          # where input is the true input, predicted semantic embedding is the mean of the k nearest semantic embeddings,
+          # and label is the true label from the informative samples
+          informative_samples = zip(
+              [sample[0] for sample in informative_samples],  # true inputs
+              k_nearest_semantic_embeddings,  # predicted semantic embeddings
+              [sample[1] for sample in informative_samples]  # true labels
+          )
+          for (is_input, is_semen, is_label) in informative_samples:
+            train_data_list.append({
+                'input': is_input.cpu().detach().numpy(),
+                'semantic': is_semen.cpu().detach().numpy(),
+                'label': is_label
+            })
+          # Append the new samples to the train_df
+          train_df = pd.concat([train_df, pd.DataFrame(train_data_list)], ignore_index=True)
 
         # Initialize the AL Train Configuration
         al_criterion = torch.nn.CrossEntropyLoss()
@@ -504,17 +603,18 @@ def AL_RL_semantic_classification_train_process(dataset, model, semantic_embeddi
         al_train_loss_list = []
 
         # Convert the train_df to a DataLoader
-        train_loader = DataLoader(train_df, batch_size=batch_size, shuffle=True)
+        al_train_loader = DataLoader(AlClassificationDataset(train_df), batch_size=batch_size, shuffle=False)
+        prev_train_accuracy = 0.0
         for epoch in range(num_epochs):
-          print(f'AL Iteration {al_iteration + 1}, Epoch {epoch + 1}/{num_epochs}...')
           model.train()
+          al_total = 0
           al_correct = 0
           al_total_loss = 0.0
-          for (inputs, semantic_embeddings, labels) in train_loader:
-            inputs, semantic_embeddings, labels = inputs.to(device), semantic_embeddings.to(device), labels.to(device)
+          for (inputs, semans, labels) in al_train_loader:
+            inputs, semans, labels = inputs.to(device), semans.to(device), labels.to(device)
             al_optimizer.zero_grad()
-            inputs = inputs - semantic_embeddings
-            outputs = agent.q_net.model(inputs)
+            inputs = inputs - semans
+            outputs = agent.q_net(inputs)
             _, al_predicted = torch.max(outputs.data, 1)
             al_correct += (al_predicted == labels).sum().item()
             al_total += labels.size(0)
@@ -524,9 +624,14 @@ def AL_RL_semantic_classification_train_process(dataset, model, semantic_embeddi
             al_total_loss += al_loss.item()
 
           al_train_accuracy = 100 * al_correct / al_total
-          al_train_loss_list.append(al_total_loss / len(train_loader))
-          print(f'AL Iteration {al_iteration + 1}, Epoch {epoch + 1}/{num_epochs}... Loss: {al_total_loss / len(train_loader):.4f}, Accuracy: {al_train_accuracy:.2f}%')
-        
+          al_train_loss_list.append(al_total_loss / len(al_train_loader))
+          if prev_train_accuracy != 0.0 and al_train_accuracy != prev_train_accuracy:
+            print()
+          print(f'\rAL Iteration {al_iteration + 1}, Epoch {epoch + 1}/{num_epochs}... Loss: {al_total_loss / len(al_train_loader):.4f}, Accuracy: {al_train_accuracy:.2f}%', end='', flush=True)
+          prev_train_accuracy = al_train_accuracy
+        # New line after the last print statement
+        print()
+
         # Validate the model after active learning iteration
         avg_val_loss, val_accuracy, val_precision, val_recall, val_f1 = semantic_validate_model(
             agent.q_net, val_dataset, train_dataset, label_to_embedding, batch_size=batch_size)
@@ -898,7 +1003,8 @@ def train(dataset, model, train_process='triplet', semantic_embedding_fn=None, k
   else:
     raise ValueError(f'Unknown training process: {train_process}')
   print('Training completed.')
-  label_to_embedding = label_to_embedding if train_process in ['semantic_classification', 'AL_RL_semantic_classification'] else None
+  label_to_embedding = label_to_embedding if train_process in [
+      'semantic_classification', 'AL_RL_semantic_classification'] else None
   return trained_model, avg_loss, avg_test_loss, label_to_embedding
 
 
@@ -1130,141 +1236,142 @@ if __name__ == '__main__':
   ])
   classifier_df = pd.DataFrame(columns=['dataset', 'model', 'transform'])
 
-  # # gi4e_full dataset
-  # def create_gi4e_triplet_dataset_fn(): return ds.TripletGi4eDataset(
-  #     './datasets/gi4e',
-  #     transform=torchvision.transforms.Compose([
-  #         torchvision.transforms.ToPILImage(),
-  #         torchvision.transforms.Resize((224, 224)),
-  #         torchvision.transforms.ToTensor()
-  #     ]))
-  # def create_gi4e_classification_dataset_fn(): return ds.Gi4eDataset(
-  #     './datasets/gi4e',
-  #     transform=torchvision.transforms.Compose([
-  #         torchvision.transforms.ToPILImage(),
-  #         torchvision.transforms.Resize((224, 224)),
-  #         torchvision.transforms.ToTensor()
-  #     ]),
-  #     is_classification=True)
-  # # Add training process for gi4e_full dataset
-  # triplet_df = pd.concat([triplet_df, create_training_process_df(
-  #     'gi4e_full',
-  #     create_gi4e_triplet_dataset_fn,
-  #     create_gi4e_classification_dataset_fn
-  # )], ignore_index=True)
+  # gi4e_full dataset
+  def create_gi4e_triplet_dataset_fn(): return ds.TripletGi4eDataset(
+      './datasets/gi4e',
+      transform=torchvision.transforms.Compose([
+          torchvision.transforms.ToPILImage(),
+          torchvision.transforms.Resize((224, 224)),
+          torchvision.transforms.ToTensor()
+      ]))
+  def create_gi4e_classification_dataset_fn(): return ds.Gi4eDataset(
+      './datasets/gi4e',
+      transform=torchvision.transforms.Compose([
+          torchvision.transforms.ToPILImage(),
+          torchvision.transforms.Resize((224, 224)),
+          torchvision.transforms.ToTensor()
+      ]),
+      is_classification=True)
+  # Add training process for gi4e_full dataset
+  triplet_df = pd.concat([triplet_df, create_training_process_df(
+      'gi4e_full',
+      create_gi4e_triplet_dataset_fn,
+      create_gi4e_classification_dataset_fn
+  )], ignore_index=True)
 
-  # # gi4e_raw_eyes dataset
-  # def create_gi4e_raw_eyes_triplet_dataset_fn(): return ds.TripletImageDataset(
-  #     './datasets/gi4e_raw_eyes',
-  #     file_extension='png',
-  #     transform=torchvision.transforms.Compose([
-  #         torchvision.transforms.Resize((224, 224)),
-  #         torchvision.transforms.ToTensor()
-  #     ]))
+  # gi4e_raw_eyes dataset
+  def create_gi4e_raw_eyes_triplet_dataset_fn(): return ds.TripletImageDataset(
+      './datasets/gi4e_raw_eyes',
+      file_extension='png',
+      transform=torchvision.transforms.Compose([
+          torchvision.transforms.Resize((224, 224)),
+          torchvision.transforms.ToTensor()
+      ]))
 
-  # def create_gi4e_raw_eyes_classification_dataset_fn(): return ds.ImageDataset(
-  #     './datasets/gi4e_raw_eyes',
-  #     file_extension='png',
-  #     transform=torchvision.transforms.Compose([
-  #         torchvision.transforms.Resize((224, 224)),
-  #         torchvision.transforms.ToTensor()
-  #     ]))
-  # # Add training process for gi4e_raw_eyes dataset
-  # triplet_df = pd.concat([triplet_df, create_training_process_df(
-  #     'gi4e_raw_eyes',
-  #     create_gi4e_raw_eyes_triplet_dataset_fn,
-  #     create_gi4e_raw_eyes_classification_dataset_fn,
-  #     models=['resnet'],
-  # )], ignore_index=True)
+  def create_gi4e_raw_eyes_classification_dataset_fn(): return ds.ImageDataset(
+      './datasets/gi4e_raw_eyes',
+      file_extension='png',
+      transform=torchvision.transforms.Compose([
+          torchvision.transforms.Resize((224, 224)),
+          torchvision.transforms.ToTensor()
+      ]))
+  # Add training process for gi4e_raw_eyes dataset
+  triplet_df = pd.concat([triplet_df, create_training_process_df(
+      'gi4e_raw_eyes',
+      create_gi4e_raw_eyes_triplet_dataset_fn,
+      create_gi4e_raw_eyes_classification_dataset_fn,
+      models=['resnet'],
+  )], ignore_index=True)
 
-  # # Youtube Faces dataset
-  # def create_youtube_faces_triplet_dataset_fn(): return ds.TripletYoutubeFacesDataset(
-  #     data_path='./datasets/YouTubeFacesWithFacialKeypoints',
-  #     transform=torchvision.transforms.Compose([
-  #         torchvision.transforms.ToPILImage(),
-  #         torchvision.transforms.Resize((224, 224)),
-  #         torchvision.transforms.ToTensor()
-  #     ]),
-  #     number_of_samples=10,  # Limit the number of samples for faster training
-  # )
-  # def create_youtube_faces_classification_dataset_fn(): return ds.YoutubeFacesWithFacialKeypoints(
-  #     data_path='./datasets/YouTubeFacesWithFacialKeypoints',
-  #     transform=torchvision.transforms.Compose([
-  #         torchvision.transforms.ToPILImage(),
-  #         torchvision.transforms.Resize((224, 224)),
-  #         torchvision.transforms.ToTensor()
-  #     ]),
-  #     number_of_samples=10,  # Limit the number of samples for faster training
-  #     is_classification=True
-  # )
-  # # Add training process for YouTube Faces dataset
-  # triplet_df = pd.concat([triplet_df, create_training_process_df(
-  #     'youtube_faces',
-  #     create_youtube_faces_triplet_dataset_fn,
-  #     create_youtube_faces_classification_dataset_fn,
-  #     batch_size=16  # Adjust batch size as needed
-  # )], ignore_index=True)
+  # Youtube Faces dataset
+  def create_youtube_faces_triplet_dataset_fn(): return ds.TripletYoutubeFacesDataset(
+      data_path='./datasets/YouTubeFacesWithFacialKeypoints',
+      transform=torchvision.transforms.Compose([
+          torchvision.transforms.ToPILImage(),
+          torchvision.transforms.Resize((224, 224)),
+          torchvision.transforms.ToTensor()
+      ]),
+      number_of_samples=10,  # Limit the number of samples for faster training
+  )
+  def create_youtube_faces_classification_dataset_fn(): return ds.YoutubeFacesWithFacialKeypoints(
+      data_path='./datasets/YouTubeFacesWithFacialKeypoints',
+      transform=torchvision.transforms.Compose([
+          torchvision.transforms.ToPILImage(),
+          torchvision.transforms.Resize((224, 224)),
+          torchvision.transforms.ToTensor()
+      ]),
+      number_of_samples=10,  # Limit the number of samples for faster training
+      is_classification=True
+  )
+  # Add training process for YouTube Faces dataset
+  triplet_df = pd.concat([triplet_df, create_training_process_df(
+      'youtube_faces',
+      create_youtube_faces_triplet_dataset_fn,
+      create_youtube_faces_classification_dataset_fn,
+      batch_size=16  # Adjust batch size as needed
+  )], ignore_index=True)
 
-  # # CelebA dataset
-  # def create_celeb_a_triplet_dataset_fn(): return ds.TripletImageDataset(
-  #     './datasets/CelebA_HQ_facial_identity_dataset/train',
-  #     file_extension='jpg',
-  #     transform=torchvision.transforms.Compose([
-  #         torchvision.transforms.Resize((224, 224)),
-  #         torchvision.transforms.ToTensor()
-  #     ]),
-  # )
-  # def create_celeb_a_classification_dataset_fn(): return ds.ImageDataset(
-  #     './datasets/CelebA_HQ_facial_identity_dataset/train',
-  #     file_extension='jpg',
-  #     transform=torchvision.transforms.Compose([
-  #         torchvision.transforms.Resize((224, 224)),
-  #         torchvision.transforms.ToTensor()
-  #     ]),
-  # )
-  # def create_celeb_a_classification_test_dataset_fn(): return ds.ImageDataset(
-  #     './datasets/CelebA_HQ_facial_identity_dataset/test',
-  #     file_extension='jpg',
-  #     transform=torchvision.transforms.Compose([
-  #         torchvision.transforms.Resize((224, 224)),
-  #         torchvision.transforms.ToTensor()
-  #     ]),
-  # )
-  # # Add training process for CelebA dataset
-  # triplet_df = pd.concat([triplet_df, create_training_process_df(
-  #     'celeb_a',
-  #     create_celeb_a_triplet_dataset_fn,
-  #     create_celeb_a_classification_dataset_fn,
-  #     create_celeb_a_classification_test_dataset_fn
-  # )], ignore_index=True)
+  # CelebA dataset
+  def create_celeb_a_triplet_dataset_fn(): return ds.TripletImageDataset(
+      './datasets/CelebA_HQ_facial_identity_dataset/train',
+      file_extension='jpg',
+      transform=torchvision.transforms.Compose([
+          torchvision.transforms.Resize((224, 224)),
+          torchvision.transforms.ToTensor()
+      ]),
+  )
+  def create_celeb_a_classification_dataset_fn(): return ds.ImageDataset(
+      './datasets/CelebA_HQ_facial_identity_dataset/train',
+      file_extension='jpg',
+      transform=torchvision.transforms.Compose([
+          torchvision.transforms.Resize((224, 224)),
+          torchvision.transforms.ToTensor()
+      ]),
+  )
+  def create_celeb_a_classification_test_dataset_fn(): return ds.ImageDataset(
+      './datasets/CelebA_HQ_facial_identity_dataset/test',
+      file_extension='jpg',
+      transform=torchvision.transforms.Compose([
+          torchvision.transforms.Resize((224, 224)),
+          torchvision.transforms.ToTensor()
+      ]),
+  )
+  # Add training process for CelebA dataset
+  triplet_df = pd.concat([triplet_df, create_training_process_df(
+      'celeb_a',
+      create_celeb_a_triplet_dataset_fn,
+      create_celeb_a_classification_dataset_fn,
+      create_celeb_a_classification_test_dataset_fn
+  )], ignore_index=True)
 
-  # # Nus2Hands dataset
-  # def create_nus2hands_triplet_dataset_fn(): return ds.TripletImageDataset(
-  #     './datasets/nus2hands',
-  #     file_extension='jpg',
-  #     transform=torchvision.transforms.Compose([
-  #         torchvision.transforms.Resize((224, 224)),
-  #         torchvision.transforms.ToTensor()
-  #     ]),
-  # )
-  # def create_nus2hands_classification_dataset_fn(): return ds.ImageDataset(
-  #     './datasets/nus2hands',
-  #     file_extension='jpg',
-  #     transform=torchvision.transforms.Compose([
-  #         torchvision.transforms.Resize((224, 224)),
-  #         torchvision.transforms.ToTensor()
-  #     ]),
-  # )
-  # # Add training process for Nus2Hands dataset
-  # triplet_df = pd.concat([triplet_df, create_training_process_df(
-  #     'nus2hands',
-  #     create_nus2hands_triplet_dataset_fn,
-  #     create_nus2hands_classification_dataset_fn,
-  #     batch_size=32  # Adjust batch size as needed
-  # )], ignore_index=True)
+  # Nus2Hands dataset
+  def create_nus2hands_triplet_dataset_fn(): return ds.TripletImageDataset(
+      './datasets/nus2hands',
+      file_extension='jpg',
+      transform=torchvision.transforms.Compose([
+          torchvision.transforms.Resize((224, 224)),
+          torchvision.transforms.ToTensor()
+      ]),
+  )
+  def create_nus2hands_classification_dataset_fn(): return ds.ImageDataset(
+      './datasets/nus2hands',
+      file_extension='jpg',
+      transform=torchvision.transforms.Compose([
+          torchvision.transforms.Resize((224, 224)),
+          torchvision.transforms.ToTensor()
+      ]),
+  )
+  # Add training process for Nus2Hands dataset
+  triplet_df = pd.concat([triplet_df, create_training_process_df(
+      'nus2hands',
+      create_nus2hands_triplet_dataset_fn,
+      create_nus2hands_classification_dataset_fn,
+      batch_size=32  # Adjust batch size as needed
+  )], ignore_index=True)
 
   # FER2013 dataset
   input_size = (48, 48)  # FER2013 input size
+
   def create_fer2013_triplet_dataset_fn(): return ds.TripletImageDataset(
       './datasets/PER-2013/train',
       file_extension='jpg',
@@ -1328,12 +1435,12 @@ if __name__ == '__main__':
     classifier_dataset = create_classification_dataset_fn()
     triplet_dataset = create_gi4e_triplet_dataset_fn()
 
-    # 1. Raw backbone model evaluation
-    current_dataset = f"{dataset_type}_Cross-Validation_None"
-    trained_backbone, _ = train_and_evaluate(
-        backbone_model, train_ds, test_ds, 'classification',
-        description="Cross-Validation"
-    )
+    # # 1. Raw backbone model evaluation
+    # current_dataset = f"{dataset_type}_Cross-Validation_None"
+    # trained_backbone, _ = train_and_evaluate(
+    #     backbone_model, train_ds, test_ds, 'classification',
+    #     description="Cross-Validation"
+    # )
 
     # 2. Train triplet model
     print(f'Training triplet model on {triplet_dataset.__class__.__name__}...')

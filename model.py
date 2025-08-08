@@ -177,6 +177,8 @@ class DDQNAgent:
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(self.q_net.parameters(), lr=0.001)
 
+    prev_accuracy = ''
+
     for epoch in range(epochs):
       correct = 0
       total = 0
@@ -185,10 +187,9 @@ class DDQNAgent:
       for (inputs, labels) in data_loader:
         inputs, labels = inputs.to(self.device), labels.to(self.device)
         # get the semantic embeddings for the labels
-        label_embeddings = torch.stack(
-            [semantic_embeddings[str(label.item())].detach().to(self.device) for label in labels])
+        label_embeddings = torch.stack([semantic_embeddings[str(label.item())].detach() for label in labels])
         # Subtract the semantic embeddings from the inputs
-        inputs = inputs - label_embeddings
+        inputs = inputs - label_embeddings.to(self.device)
 
         outputs = self.q_net(inputs)
         loss = loss_fn(outputs, labels)
@@ -202,7 +203,12 @@ class DDQNAgent:
         loss_list.append(loss.item())
       train_accuracy = 100 * correct / total
       avg_loss = sum(loss_list) / len(loss_list)
-      # print(f'Epoch [{epoch + 1}/{epochs}], Loss: {avg_loss:.4f}, Accuracy: {train_accuracy:.2f}%')
 
+      if prev_accuracy != '' and train_accuracy != prev_accuracy:
+        print()
+      print(f'\rEpoch [{epoch + 1}/{epochs}], Loss: {avg_loss:.4f}, Train Accuracy: {train_accuracy:.2f}%', end='', flush=True)
+      prev_accuracy = train_accuracy
+
+    print()  # New line after the last epoch output
     # return the trained Q-network, average loss, and training accuracy
     return self.q_net, avg_loss, train_accuracy
