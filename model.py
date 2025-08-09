@@ -9,36 +9,39 @@ import torch.nn as nn
 
 
 class FeatureExtractor(nn.Module):
-  def __init__(self, backbone: nn.Module):
+  def __init__(self, backbone: nn.Module, output_size: int = None):
     super(FeatureExtractor, self).__init__()
     self.backbone = backbone
 
     # drop the last layer
     self.features = nn.Sequential(*list(backbone.children())[:-1])
-
-    # define a new fully connected layer
-    # assuming the input size is 2048 for ResNet50
-    if isinstance(backbone, models.ResNet):
-      output_size = 2048
-      self.features.append(nn.Flatten())
-    elif isinstance(backbone, models.VGG):
-      output_size = 25088  # VGG16/19
-      self.features.append(nn.Flatten())
-    elif isinstance(backbone, models.MobileNetV2):
-      output_size = 1280  # MobileNetV2
-      self.features.append(nn.AdaptiveAvgPool2d((1, 1)))
-      self.features.append(nn.Flatten())
-      self.features.append(nn.Dropout(p=0.2))
-    elif isinstance(backbone, models.DenseNet):
-      output_size = 1024  # DenseNet121
-      self.features.append(nn.ReLU(inplace=True))
-      self.features.append(nn.AdaptiveAvgPool2d((1, 1)))
-      self.features.append(nn.Flatten())
-    else:
-      raise ValueError("Unsupported backbone model")
-    self.fc1 = nn.Linear(output_size, 768)  # Fully connected layer to reduce dimensions
-
-    self.out_features = output_size  # Size of the output feature vector
+    # If output_size is not provided, we will infer it from the backbone
+    if output_size is None:
+      # define a new fully connected layer
+      # assuming the input size is 2048 for ResNet50
+      if isinstance(backbone, models.ResNet):
+        output_size = 2048
+        self.features.append(nn.Flatten())
+      elif isinstance(backbone, models.VGG):
+        output_size = 25088  # VGG16/19
+        self.features.append(nn.Flatten())
+      elif isinstance(backbone, models.MobileNetV2):
+        output_size = 1280  # MobileNetV2
+        self.features.append(nn.AdaptiveAvgPool2d((1, 1)))
+        self.features.append(nn.Flatten())
+        self.features.append(nn.Dropout(p=0.2))
+      elif isinstance(backbone, models.DenseNet):
+        output_size = 1024  # DenseNet121
+        self.features.append(nn.ReLU(inplace=True))
+        self.features.append(nn.AdaptiveAvgPool2d((1, 1)))
+        self.features.append(nn.Flatten())
+      else:
+        raise ValueError("Unsupported backbone model")
+      
+    # Fully connected layer to reduce dimensions
+    self.fc1 = nn.Linear(output_size, 768)
+    # Size of the output feature vector
+    self.out_features = output_size
 
   def _get_name(self):
     return f"FeatureExtractor({self.backbone.__class__.__name__})"
