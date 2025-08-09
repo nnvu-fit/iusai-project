@@ -484,6 +484,7 @@ def AL_RL_semantic_classification_train_process(dataset, model, semantic_embeddi
   num_al_iterations = 5
   num_epochs = 10
   num_of_k_nearest = 3
+  num_of_al_taken = 2
 
   # split dataset using k-fold cross-validation
   dataset_size = len(dataset)
@@ -556,7 +557,7 @@ def AL_RL_semantic_classification_train_process(dataset, model, semantic_embeddi
       # apply active learning logic here
       for al_iteration in range(num_al_iterations):  # Number of active learning iterations
         print(f'Active Learning iteration {al_iteration + 1}/{num_al_iterations}...')
-        sample_taken += 2
+        sample_taken += num_of_al_taken
         # Get the n most informative samples indices
         informative_samples_indices = get_n_most_informative_samples_indices(
             val_dataset, agent.q_net, samples_taken_indices, n=sample_taken)
@@ -1435,12 +1436,12 @@ if __name__ == '__main__':
     classifier_dataset = create_classification_dataset_fn()
     triplet_dataset = create_gi4e_triplet_dataset_fn()
 
-    # # 1. Raw backbone model evaluation
-    # current_dataset = f"{dataset_type}_Cross-Validation_None"
-    # trained_backbone, _ = train_and_evaluate(
-    #     backbone_model, train_ds, test_ds, 'classification',
-    #     description="Cross-Validation"
-    # )
+    # 1. Raw backbone model evaluation
+    current_dataset = f"{dataset_type}_Cross-Validation_None"
+    trained_backbone, _ = train_and_evaluate(
+        backbone_model, train_ds, test_ds, 'classification',
+        description="Cross-Validation"
+    )
 
     # 2. Train triplet model
     print(f'Training triplet model on {triplet_dataset.__class__.__name__}...')
@@ -1456,26 +1457,26 @@ if __name__ == '__main__':
     embedded_test_ds = ds.EmbeddedDataset(test_ds, trained_triplet, is_moving_labels_to_function=False)
     print(f'Embedded datasets created for {dataset_type}.')
 
-    # # 4. Train classifier with triplet embeddings (no label moving)
-    # current_dataset = f"{dataset_type}_Cross-Validation_Triplet"
-    # trained_classifier, _ = train_and_evaluate(
-    #     Classifier(trained_triplet), embedded_train_ds, embedded_test_ds, 'semantic_classification',
-    #     semantic_fn=None, description="Cross-Validation + Triplet"
-    # )
+    # 4. Train classifier with triplet embeddings (no label moving)
+    current_dataset = f"{dataset_type}_Cross-Validation_Triplet"
+    trained_classifier, _ = train_and_evaluate(
+        Classifier(trained_triplet), embedded_train_ds, embedded_test_ds, 'semantic_classification',
+        semantic_fn=None, description="Cross-Validation + Triplet"
+    )
 
-    # # 5. Train classifier with x-to-x label moving
-    # current_dataset = f"{dataset_type}_Cross-Validation_Triplet_Moving_Labels_x-to-x"
-    # trained_classifier_x_to_x, _ = train_and_evaluate(
-    #     Classifier(trained_triplet), embedded_train_ds, embedded_test_ds, 'semantic_classification',
-    #     semantic_fn=lambda x: x, description="Cross-Validation + Triplet + Moving Labels - x => x"
-    # )
+    # 5. Train classifier with x-to-x label moving
+    current_dataset = f"{dataset_type}_Cross-Validation_Triplet_Moving_Labels_x-to-x"
+    trained_classifier_x_to_x, _ = train_and_evaluate(
+        Classifier(trained_triplet), embedded_train_ds, embedded_test_ds, 'semantic_classification',
+        semantic_fn=lambda x: x, description="Cross-Validation + Triplet + Moving Labels - x => x"
+    )
 
-    # # 6. Train classifier with x-to-4x label moving
-    # current_dataset = f"{dataset_type}_Cross-Validation_Triplet_Moving_Labels_x-to-4x"
-    # trained_classifier_x_to_4x, _ = train_and_evaluate(
-    #     Classifier(trained_triplet), embedded_train_ds, embedded_test_ds, 'semantic_classification',
-    #     semantic_fn=lambda x: 4 * x, description="Cross-Validation + Triplet + Moving Labels - x => 4*x"
-    # )
+    # 6. Train classifier with x-to-4x label moving
+    current_dataset = f"{dataset_type}_Cross-Validation_Triplet_Moving_Labels_x-to-4x"
+    trained_classifier_x_to_4x, _ = train_and_evaluate(
+        Classifier(trained_triplet), embedded_train_ds, embedded_test_ds, 'semantic_classification',
+        semantic_fn=lambda x: 4 * x, description="Cross-Validation + Triplet + Moving Labels - x => 4*x"
+    )
 
     # 7. Train classifier with x-to-4x label moving with AL-RL
     current_dataset = f"{dataset_type}_Cross-Validation_Triplet_Moving_Labels_AL_RL"
