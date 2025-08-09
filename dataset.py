@@ -567,7 +567,7 @@ class EmbeddedDataset(Dataset):
         images, targets = images.to(self.device), targets.to(self.device)
 
         # # embed the image using the model
-        embeddings = self.model.forward(images)  # Add batch dimension
+        embeddings = self.model(images)  # Add batch dimension
 
         # get embeded label using the nomic model
         target_labels = [target['label'] if isinstance(target, dict) else target for target in targets]
